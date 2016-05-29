@@ -70,6 +70,7 @@ class SeleniumConfiguration(Configuration):
         self._frame_tags = []
         self._domains = []
         self._scripts = []
+        self._trace_amount = 1
         self._analyzer = {
             'simple_clickable_tags': False,
             'simple_inputs_tags': False,
@@ -131,6 +132,12 @@ class SeleniumConfiguration(Configuration):
 
     def get_domains(self):
         return self._domains
+
+    def set_trace_amount(self, amount):
+        self._trace_amount = amount
+
+    def get_trace_amount(self):
+        return self._trace_amount
 
 #==============================================================================================================
 # Dom analysis configuration

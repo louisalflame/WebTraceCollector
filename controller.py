@@ -16,7 +16,6 @@ from dom_analyzer import DomAnalyzer
 from data_bank import MysqlDataBank, InlineDataBank
 from normalizer import AttributeNormalizer, TagNormalizer, TagWithAttributeNormalizer
 from connecter import mysqlConnect, nullConnect
-from automata_builder import AutomataBuilder
 
 #==============================================================================================================================
 # Selenium Web Driver

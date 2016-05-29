@@ -107,6 +107,55 @@ class Automata:
                 traces.append( (state_trace, edge_trace) )
         return traces
 
+    def save_dom(self, configuration, state):
+        try:
+            """
+            TODO:
+            save Dom with iframe structure
+            """
+            with codecs.open(os.path.join(configuration.get_abs_path('dom'), state.get_id() + '.txt'), 'w', encoding='utf-8' ) as f:
+                f.write(state.get_all_dom())
+            with codecs.open(os.path.join(configuration.get_abs_path('dom'), state.get_id() + '_nor.txt'), 'w', encoding='utf-8' ) as f:
+                f.write(state.get_all_normalize_dom())
+            with codecs.open(os.path.join(configuration.get_abs_path('dom'), state.get_id() + '_inputs.txt'), 'w', encoding='utf-8' ) as f:
+                json.dump(state.get_all_inputs_json(), f, indent=2, sort_keys=True, ensure_ascii=False)
+            with codecs.open(os.path.join(configuration.get_abs_path('dom'), state.get_id() + '_selects.txt'), 'w', encoding='utf-8' ) as f:
+                json.dump(state.get_all_selects_json(), f, indent=2, sort_keys=True, ensure_ascii=False)
+            with codecs.open(os.path.join(configuration.get_abs_path('dom'), state.get_id() + '_clicks.txt'), 'w', encoding='utf-8') as f:
+                json.dump(state.get_all_candidate_clickables_json(), f, indent=2, sort_keys=True, ensure_ascii=False)
+        except Exception as e:  
+            logging.error(' save dom : %s \t\t__from crawler.py save_dom()', str(e))
+
+    def save_state(self, configuration, state, depth):
+        candidate_clickables = {}       
+        inputs = {}
+        selects = {}
+        checkboxes = {}
+        radios = {}
+        for stateDom in state.get_dom_list():
+            """
+            TODO: turn TempFile stateDom into FilePath stateDom
+            """
+            iframe_path_list = stateDom['iframe_path']
+            dom = stateDom['dom']
+            iframe_key = ';'.join(iframe_path_list) if iframe_path_list else None
+            candidate_clickables[iframe_key] = DomAnalyzer.get_candidate_clickables_soup(dom)
+            inputs[iframe_key] = DomAnalyzer.get_inputs(dom)
+            selects[iframe_key] = DomAnalyzer.get_selects(dom)
+            checkboxes[iframe_key] = DomAnalyzer.get_checkboxes(dom)
+            radios[iframe_key] = DomAnalyzer.get_radios(dom)
+        state.set_candidate_clickables(candidate_clickables)
+        state.set_inputs(inputs)
+        state.set_selects(selects)
+        state.set_checkboxes(checkboxes)
+        state.set_radios(radios)
+        state.set_depth(depth)
+        self.save_dom(configuration, state)
+
+    def save_state_shot(self, configuration, executor, state):
+        path = os.path.join(configuration.get_abs_path('state'), state.get_id() + '.png')
+        executor.get_screenshot(path)
+
     def save_traces(self, configuration):
         traces = self.get_all_simple_states_and_traces()
         traces_data = {
@@ -378,12 +427,12 @@ class State:
         return self._dom_list
 
     def get_all_dom(self):
-        dom = [ stateDom.get_dom() for stateDom in self._dom_list ]
+        dom = [ stateDom['dom'] for stateDom in self._dom_list ]
         dom = "\n".join(dom)
         return dom
 
     def get_all_normalize_dom(self):
-        dom = [ stateDom.get_normalize_dom() for stateDom in self._dom_list ]
+        dom = [ DomAnalyzer.normalize( stateDom['dom'] ) for stateDom in self._dom_list ]
         dom = "\n".join(dom)
         return dom
 
@@ -439,32 +488,7 @@ class State:
             'depth': self._depth
         }
         return state_data
-    #============================================================================
-
-class StateDom:
-    def __init__(self, iframe_path_list, dom, url):
-        self.iframe_path_list = iframe_path_list
-        self.dom = dom
-        self.url = url
-        self.normalize_dom = DomAnalyzer.normalize(dom)
-
-    def get_url(self):
-        return self.url
-
-    def get_iframe_path_list(self):
-        return self.iframe_path_list
-
-    def get_dom(self):
-        return self.dom
-
-    def get_normalize_dom(self):
-        return self.normalize_dom
-
-    def is_same(self, stateDom):
-        return self.url == stateDom.get_url() and \
-               self.iframe_path_list == stateDom.get_iframe_path_list() and \
-               DomAnalyzer.is_normalize_equal(self.normalize_dom, stateDom.get_normalize_dom())
-
+        
 class Edge:
     def __init__(self, state_from, state_to, clickable, \
                  inputs, selects, checkboxes, radios, iframe_key, cost = 1):

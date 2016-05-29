@@ -30,13 +30,25 @@ class Crawler:
 # Selenium Web Driver
 #==============================================================================================================================
 class SeleniumCrawler(Crawler):
-    def __init__(self, configuration, executor, automata, databank):
+    def __init__(self, configuration, executor, automata, databank, algorithm):
         self.configuration = configuration
         self.executor = executor
         self.automata = automata
         #list of event:(state, clickable, inputs, selects, iframe_list)
         self.event_history = []
         self.databank = databank
+
+        #ALGO
+        self.algorithm = algorithm
+
+    def run_algorithm():
+        #start time
+        self.time_start = time.time()
+        self.algorithm.prepare()
+
+        for i in range( self.configuration.get_trace_amount() ):
+            self.algorithm.run()
+        self
     
     def run(self):
         #start time
@@ -127,7 +139,8 @@ class SeleniumCrawler(Crawler):
                     '''TODO: value of inputs should connect with edges '''
                     if is_newly_added:
                         logging.info(' |depth:%s state:%s| add new state %s of : %s', depth, current_state.get_id(), new_state.get_id(), url )
-                        self.save_state(new_state, depth)
+                        self.automata.save_state(self.configuration, new_state, depth)
+                        self.automata.save_state_shot(self.configuration, self.executor, new_state)
                         self.event_history.append( new_edge )
                         if depth < self.configuration.get_max_depth():
                             self.automata.change_state(new_state)
@@ -261,7 +274,8 @@ class SeleniumCrawler(Crawler):
             prev_state.add_clickable(edge.get_clickable(), new_edge.get_iframe_list())
             if is_newly_added:
                 logging.info(' add new state %s of: %s', new_state.get_id(), url)
-                self.save_state(new_state, depth+1)
+                self.automata.save_state(self.configuration, new_state, depth+1)
+                self.automata.save_state_shot(self.configuration, self.executor, new_state)
                 self.automata.change_state(new_state)
             # save the state, edge
             state_trace.append( new_state )
@@ -312,11 +326,12 @@ class SeleniumCrawler(Crawler):
 #=========================================================================================
     def get_initail_state(self):
         logging.info(' get initial state')
-        dom_list, url = self.get_dom_list()
+        dom_list, url = self.executor.get_dom_list(self.configuration)
         initial_state = State( dom_list, url )
         is_new, state = self.automata.set_initial_state(initial_state)
         if is_new:
-            self.save_state(initial_state, 0)
+            self.automata.save_state(self.configuration, initial_state, 0)
+            self.automata.save_state_shot(self.configuration, self.executor, initial_state)
         time.sleep(self.configuration.get_sleep_time())
         return state
 
@@ -337,7 +352,8 @@ class SeleniumCrawler(Crawler):
             prev_state.add_clickable(edge.get_clickable(), edge.get_iframe_list())
             if is_newly_added:
                 logging.info(' add new state %s of: %s', new_state.get_id(), url)
-                self.save_state(new_state, 0)
+                self.automata.save_state(self.configuration, new_state, 0)
+                self.automata.save_state_shot(self.configuration, self.executor, new_state)
                 self.automata.change_state(new_state)
             prev_state = new_state
 
@@ -426,7 +442,7 @@ class SeleniumCrawler(Crawler):
             return False
 
     def is_same_state_dom(self, cs):
-        dom_list, url = self.get_dom_list()
+        dom_list, url = self.get_dom_list(self.configuration)
         cs_dom_list = cs.get_dom_list()
         if url != cs.get_url():
             return dom_list, url, False
@@ -441,86 +457,3 @@ class SeleniumCrawler(Crawler):
 #=========================================================================================
 # STATE
 #=========================================================================================
-    def save_dom(self, state):
-        try:
-            """
-            TODO:
-            save Dom with iframe structure
-            """
-            with codecs.open(os.path.join(self.configuration.get_abs_path('dom'), state.get_id() + '.txt'), 'w', encoding='utf-8' ) as f:
-                f.write(state.get_all_dom())
-            with codecs.open(os.path.join(self.configuration.get_abs_path('dom'), state.get_id() + '_nor.txt'), 'w', encoding='utf-8' ) as f:
-                f.write(state.get_all_normalize_dom())
-            with codecs.open(os.path.join(self.configuration.get_abs_path('dom'), state.get_id() + '_inputs.txt'), 'w', encoding='utf-8' ) as f:
-                json.dump(state.get_all_inputs_json(), f, indent=2, sort_keys=True, ensure_ascii=False)
-            with codecs.open(os.path.join(self.configuration.get_abs_path('dom'), state.get_id() + '_selects.txt'), 'w', encoding='utf-8' ) as f:
-                json.dump(state.get_all_selects_json(), f, indent=2, sort_keys=True, ensure_ascii=False)
-            with codecs.open(os.path.join(self.configuration.get_abs_path('dom'), state.get_id() + '_clicks.txt'), 'w', encoding='utf-8') as f:
-                json.dump(state.get_all_candidate_clickables_json(), f, indent=2, sort_keys=True, ensure_ascii=False)
-        except Exception as e:  
-            logging.error(' save dom : %s \t\t__from crawler.py save_dom()', str(e))
-
-    #Diff: save state's information(inputs, selects, screenshot, [normalize]dom/iframe)
-    def save_state(self, state, depth):
-        candidate_clickables = {}       
-        inputs = {}
-        selects = {}
-        checkboxes = {}
-        radios = {}
-        for stateDom in state.get_dom_list():
-            """
-            TODO: turn TempFile stateDom into FilePath stateDom
-            """
-            iframe_path_list = stateDom.get_iframe_path_list()
-            dom = stateDom.get_dom()
-            iframe_key = ';'.join(iframe_path_list) if iframe_path_list else None
-            candidate_clickables[iframe_key] = DomAnalyzer.get_candidate_clickables_soup(dom)
-            inputs[iframe_key] = DomAnalyzer.get_inputs(dom)
-            selects[iframe_key] = DomAnalyzer.get_selects(dom)
-            checkboxes[iframe_key] = DomAnalyzer.get_checkboxes(dom)
-            radios[iframe_key] = DomAnalyzer.get_radios(dom)
-        state.set_candidate_clickables(candidate_clickables)
-        state.set_inputs(inputs)
-        state.set_selects(selects)
-        state.set_checkboxes(checkboxes)
-        state.set_radios(radios)
-        state.set_depth(depth)
-
-        # save this state's screenshot and dom
-        path = os.path.join(self.configuration.get_abs_path('state'), state.get_id() + '.png')
-        self.executor.get_screenshot(path)
-        self.save_dom(state)
-
-    def get_dom_list(self):
-        #save dom of iframe in list of StateDom [iframe_path_list, dom, url/src, normalize dom]
-        dom_list = []
-        new_dom = self.executor.switch_iframe_and_get_source()
-        url = self.executor.get_url()
-        soup = BeautifulSoup(new_dom, 'html5lib')
-        for frame in self.configuration.get_frame_tags():
-            for iframe_tag in soup.find_all(frame):
-                iframe_xpath = DomAnalyzer._get_xpath(iframe_tag)
-                iframe_src = iframe_tag['src'] if iframe_tag.has_attr('src') else None
-                try: #not knowing what error in iframe_tag.clear(): no src
-                    if self.configuration.is_dom_inside_iframe():
-                        self.get_dom_of_iframe(dom_list, [iframe_xpath], iframe_src)
-                    iframe_tag.clear()
-                except Exception as e:
-                    logging.error(' get_dom_of_iframe: %s \t\t__from crawler.py get_dom_list() ', str(e))
-        dom_list.append( StateDom(None, str(soup), url) )
-        return dom_list, url
-
-    def get_dom_of_iframe(self, dom_list, iframe_xpath_list, src):
-        dom = self.executor.switch_iframe_and_get_source(iframe_xpath_list)
-        soup = BeautifulSoup(dom, 'html5lib')
-        for frame in self.configuration.get_frame_tags():
-            for iframe_tag in soup.find_all(frame):
-                iframe_xpath = DomAnalyzer._get_xpath(iframe_tag)
-                iframe_xpath_list.append(iframe_xpath)
-                iframe_src = iframe_tag['src'] if iframe_tag.has_attr('src') else None
-                try:
-                    self.get_dom_of_iframe(dom_list, iframe_xpath_list, iframe_src)      
-                    iframe_tag.clear()
-                except Exception as e:
-                    logging.error(' get_dom_of_iframe: %s \t\t__from crawler.py get_dom_list() ', str(e))
-        dom_list.append( StateDom(iframe_xpath_list, str(soup), src) )
