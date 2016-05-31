@@ -78,7 +78,7 @@ def SeleniumMutationTrace(folderpath, dirname, config_fname, traces_fname, trace
 
 def debugTestMain(folderpath, dirname):
     logging.info(" setting config...")
-    config = SeleniumConfiguration(Browser.FireFox, "http://www.dodocook.com/")
+    config = SeleniumConfiguration(Browser.FireFox, "http://140.112.42.145:2000/demo/nothing/people.html")
     config.set_max_depth(1)
     config.set_max_states(100)
     config.set_folderpath(folderpath)
@@ -86,7 +86,7 @@ def debugTestMain(folderpath, dirname):
     config.set_automata_fname('automata.json')
     config.set_traces_fname('traces.json')
     config.set_frame_tags(['iframe'])
-    config.set_dom_inside_iframe(False)
+    config.set_dom_inside_iframe(True)
 
     logging.info(" setting executor...")
     executor = SeleniumExecutor(config.get_browserID(), config.get_url())
@@ -97,7 +97,7 @@ def debugTestMain(folderpath, dirname):
     crawler = SeleniumCrawler(config, executor, automata, databank)
 
     logging.info(" crawler start run...")
-    crawler.run()
+    crawler.run_algorithm()
     crawler.close()
 
     logging.info(" end! save automata...")

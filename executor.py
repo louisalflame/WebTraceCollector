@@ -282,6 +282,8 @@ class SeleniumExecutor():
                 'dom' : str(soup),
                 'iframe_path' : None,
             } )
+
+        print (  len(dom_list) )
         return dom_list, url
 
     def get_dom_of_iframe(self, configuration, dom_list, iframe_xpath_list, src):

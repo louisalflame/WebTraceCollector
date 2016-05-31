@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os, sys, json, posixpath, time, datetime, codecs, logging, random, logging
-from automata import Automata, State, StateDom, Edge
+from automata import Automata, State, Edge
 from dom_analyzer import DomAnalyzer
 from configuration import MutationMethod, MutationMode
 

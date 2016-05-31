@@ -12,7 +12,7 @@ from enum import Enum
 
 from dom_analyzer import DomAnalyzer, Tag
 from clickable import Clickable, InputField, SelectField, Checkbox, CheckboxField, Radio, RadioField
-from automata import Automata, State, StateDom, Edge
+from automata import Automata, State, Edge
 from normalizer import AttributeNormalizer, TagNormalizer, TagWithAttributeNormalizer
 
 class Configuration:

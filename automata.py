@@ -6,7 +6,7 @@
 The automata (finite state machine) referenced by the monkey.
 """
 
-import os, sys, json, posixpath, time, codecs, random
+import os, sys, json, posixpath, time, codecs, random, logging
 from os.path import relpath
 import networkx
 from dom_analyzer import DomAnalyzer
@@ -109,20 +109,49 @@ class Automata:
 
     def save_dom(self, configuration, state):
         try:
+            #make dir for each state
+            state_dir = os.path.join( configuration.get_abs_path('dom'), state.get_id() )
+            if not os.path.isdir(state_dir):
+                os.makedirs(state_dir)
+
+            iframe_num = 0
+            iframe_key_dict = {}
+            for stateDom in state.get_dom_list():
+                iframe_key = ';'.join(stateDom['iframe_path']) if stateDom['iframe_path'] else None
+                #make new dir for iframe
+                if stateDom['iframe_path']:
+                    iframe_num += 1
+                    iframe_key_dict[ str(iframe_num) ] = { 'path' : stateDom['iframe_path'], 'url': stateDom['url'] }
+                    dom_dir = os.path.join( configuration.get_abs_path('dom'), state.get_id(), str(iframe_num) )
+                    if not os.path.isdir(dom_dir):
+                        os.makedirs(dom_dir)
+                else:
+                    iframe_key_dict['basic'] = { 'url' : stateDom['url'] }
+                    dom_dir = os.path.join( configuration.get_abs_path('dom'), state.get_id() )
+
+                with codecs.open( os.path.join( dom_dir, state.get_id()+'.txt'),            'w', encoding='utf-8' ) as f:
+                    f.write( stateDom['dom'] )
+                with codecs.open( os.path.join( dom_dir, state.get_id()+'_nor.txt'),        'w', encoding='utf-8' ) as f:
+                    f.write( DomAnalyzer.normalize( stateDom['dom'] ) )
+                with codecs.open( os.path.join( dom_dir, state.get_id()+'_inputs.txt'),     'w', encoding='utf-8' ) as f:
+                    json.dump(state.get_inputs_json( iframe_key ),               f, indent=2, sort_keys=True, ensure_ascii=False)
+                with codecs.open( os.path.join( dom_dir, state.get_id()+'_selects.txt'),    'w', encoding='utf-8' ) as f:
+                    json.dump(state.get_selects_json(iframe_key ),               f, indent=2, sort_keys=True, ensure_ascii=False)
+                with codecs.open( os.path.join( dom_dir, state.get_id()+'_radios.txt'),     'w', encoding='utf-8' ) as f:
+                    json.dump(state.get_radios_json(iframe_key ),                f, indent=2, sort_keys=True, ensure_ascii=False)
+                with codecs.open( os.path.join( dom_dir, state.get_id()+'_checkboxes.txt'), 'w', encoding='utf-8' ) as f:
+                    json.dump(state.get_checkboxes_json(iframe_key ),            f, indent=2, sort_keys=True, ensure_ascii=False)
+                with codecs.open( os.path.join( dom_dir, state.get_id()+'_clicks.txt'),     'w', encoding='utf-8' ) as f:
+                    json.dump(state.get_candidate_clickables_json( iframe_key ), f, indent=2, sort_keys=True, ensure_ascii=False)
+
+            with codecs.open( os.path.join( state_dir, 'iframe_list.json'),  'w', encoding='utf-8' ) as f:
+                json.dump( iframe_key_dict, f, indent=2, sort_keys=True, ensure_ascii=False)
+
             """
-            TODO:
-            save Dom with iframe structure
+            TODO: turn TempFile stateDom into FilePath stateDom
             """
-            with codecs.open(os.path.join(configuration.get_abs_path('dom'), state.get_id() + '.txt'), 'w', encoding='utf-8' ) as f:
-                f.write(state.get_all_dom())
-            with codecs.open(os.path.join(configuration.get_abs_path('dom'), state.get_id() + '_nor.txt'), 'w', encoding='utf-8' ) as f:
-                f.write(state.get_all_normalize_dom())
-            with codecs.open(os.path.join(configuration.get_abs_path('dom'), state.get_id() + '_inputs.txt'), 'w', encoding='utf-8' ) as f:
-                json.dump(state.get_all_inputs_json(), f, indent=2, sort_keys=True, ensure_ascii=False)
-            with codecs.open(os.path.join(configuration.get_abs_path('dom'), state.get_id() + '_selects.txt'), 'w', encoding='utf-8' ) as f:
-                json.dump(state.get_all_selects_json(), f, indent=2, sort_keys=True, ensure_ascii=False)
-            with codecs.open(os.path.join(configuration.get_abs_path('dom'), state.get_id() + '_clicks.txt'), 'w', encoding='utf-8') as f:
-                json.dump(state.get_all_candidate_clickables_json(), f, indent=2, sort_keys=True, ensure_ascii=False)
+            state.clear_dom()
+
         except Exception as e:  
             logging.error(' save dom : %s \t\t__from crawler.py save_dom()', str(e))
 
@@ -133,23 +162,24 @@ class Automata:
         checkboxes = {}
         radios = {}
         for stateDom in state.get_dom_list():
-            """
-            TODO: turn TempFile stateDom into FilePath stateDom
-            """
             iframe_path_list = stateDom['iframe_path']
             dom = stateDom['dom']
+            # define iframe_key of dom dict
             iframe_key = ';'.join(iframe_path_list) if iframe_path_list else None
+
             candidate_clickables[iframe_key] = DomAnalyzer.get_candidate_clickables_soup(dom)
             inputs[iframe_key] = DomAnalyzer.get_inputs(dom)
             selects[iframe_key] = DomAnalyzer.get_selects(dom)
             checkboxes[iframe_key] = DomAnalyzer.get_checkboxes(dom)
             radios[iframe_key] = DomAnalyzer.get_radios(dom)
+
         state.set_candidate_clickables(candidate_clickables)
         state.set_inputs(inputs)
         state.set_selects(selects)
         state.set_checkboxes(checkboxes)
         state.set_radios(radios)
         state.set_depth(depth)
+
         self.save_dom(configuration, state)
 
     def save_state_shot(self, configuration, executor, state):
@@ -261,11 +291,8 @@ class State:
         return self._id
 
     def add_prev_state(self, state):
-        for s in self._prev_states:
-            if s.get_dom() == state.get_dom():
-                return False
-        self._prev_states.append(state)
-        return True
+        if state not in self._prev_states:
+            self._prev_states.append(state)
 
     def get_prev_states(self):
         return self._prev_states
@@ -277,8 +304,20 @@ class State:
     def set_inputs(self, inputs):
         self._inputs = inputs
 
-    def get_inputs(self, iframe_list):
-        return self._inputs[iframe_list]
+    def get_inputs(self, iframe_key):
+        return self._inputs[iframe_key]
+
+    def get_inputs_json(self, iframe_key):
+        inputs_data = { 'inputs': [] }
+        inputs_data['iframe_list'] = iframe_key.split(';') if iframe_key else None
+        for my_input in self._inputs[iframe_key]:
+            inputs_data['inputs'].append( {
+                'id'   : my_input.get_id(),
+                'name' : my_input.get_name(),
+                'xpath': my_input.get_xpath(),
+                'type' : my_input.get_type(),
+            } ) 
+        return inputs_data
 
     def get_all_inputs(self):
         return self._inputs 
@@ -291,21 +330,32 @@ class State:
             }
             iframe_data['iframe_list'] = iframe_key.split(';') if iframe_key else None
             for my_input in self._inputs[iframe_key]:
-                input_data = {
-                    'id': my_input.get_id(),
-                    'name': my_input.get_name(),
+                iframe_data['inputs'].append( {
+                    'id'   : my_input.get_id(),
+                    'name' : my_input.get_name(),
                     'xpath': my_input.get_xpath(),
-                    'type': my_input.get_type(),
-                }
-                iframe_data['inputs'].append(input_data) 
+                    'type' : my_input.get_type(),
+                } ) 
             note.append(iframe_data)
         return note
 
     def set_selects(self, selects):
         self._selects = selects
 
-    def get_selects(self, iframe_list):
-        return self._selects[iframe_list]
+    def get_selects(self, iframe_key):
+        return self._selects[iframe_key]
+
+    def get_selects_json(self, iframe_key):
+        selects_data = { 'selects': [] }
+        selects_data['iframe_list'] = iframe_key.split(';') if iframe_key else None
+        for my_select in self._selects[iframe_key]:
+            selects_data['selects'].append( {
+                'id'   : my_select.get_id(),
+                'name' : my_select.get_name(),
+                'xpath': my_select.get_xpath(),
+                'value': my_select.get_value()
+            } )
+        return selects_data
 
     def get_all_selects(self):
         return self._selects
@@ -319,8 +369,8 @@ class State:
             iframe_data['iframe_list'] = iframe_key.split(';') if iframe_key else None
             for my_select in self._selects[iframe_key]:
                 select_data = {
-                    'id': my_select.get_id(),
-                    'name': my_select.get_name(),
+                    'id'   : my_select.get_id(),
+                    'name' : my_select.get_name(),
                     'xpath': my_select.get_xpath(),
                     'value': my_select.get_value()
                 }
@@ -328,14 +378,29 @@ class State:
             note.append(iframe_data)
         return note
 
-    def set_inputs(self, inputs):
-        self._inputs = inputs
-
     def set_checkboxes(self, checkboxes):
         self._checkboxes = checkboxes
 
-    def get_checkboxes(self, iframe_list):
-        return self._checkboxes[iframe_list]
+    def get_checkboxes(self, iframe_key):
+        return self._checkboxes[iframe_key]
+
+    def get_checkboxes_json(self, iframe_key):
+        checkboxes_data = { 'checkboxes': [] }
+        checkboxes_data['iframe_list'] = iframe_key.split(';') if iframe_key else None
+        for my_checkbox_field in self._checkboxes[iframe_key]:
+            checkbox_field_data = {
+                'checkbox_name': my_checkbox_field.get_checkbox_name(),
+                'checkbox_list': []
+            }
+            for my_checkbox in my_checkbox_field.get_checkbox_list():
+                checkbox_field_data['checkbox_list'].append( {
+                    'id'   : my_checkbox.get_id(),
+                    'name' : my_checkbox.get_name(),
+                    'xpath': my_checkbox.get_xpath(),
+                    'value': my_checkbox.get_value()
+                } )
+            checkboxes_data['checkboxes'].append(checkbox_field_data)
+        return checkboxes_data 
 
     def get_all_checkboxes(self):
         return self._checkboxes
@@ -353,25 +418,39 @@ class State:
                     'checkbox_list': []
                 }
                 for my_checkbox in my_checkbox_field.get_checkbox_list():
-                    checkbox_data = {
-                        'id': my_checkbox.get_id(),
-                        'name': my_checkbox.get_name(),
+                    checkbox_field_data['checkbox_list'].append( {
+                        'id'   : my_checkbox.get_id(),
+                        'name' : my_checkbox.get_name(),
                         'xpath': my_checkbox.get_xpath(),
                         'value': my_checkbox.get_value()
-                    }
-                    checkbox_field_data['checkbox_list'].append(checkbox_data)
+                    } )
                 iframe_data['checkboxes'].append(checkbox_field_data)  
             note.append(iframe_data)
         return note
 
-    def set_checkboxes(self, checkboxes):
-        self._checkboxes = checkboxes
-
     def set_radios(self, radios):
         self._radios = radios
 
-    def get_radios(self, iframe_list):
-        return self._radios[iframe_list]
+    def get_radios(self, iframe_key):
+        return self._radios[iframe_key]
+
+    def get_radios_json(self, iframe_key):
+        radios_data = { 'radios': [] }
+        radios_data['iframe_list'] = iframe_key.split(';') if iframe_key else None
+        for my_radio_field in self._radios[iframe_key]:
+            radio_field_data = {
+                'radio_name': my_radio_field.get_radio_name(),
+                'radio_list': []
+            }
+            for my_radio in my_radio_field.get_radio_list():
+                radio_field_data['radio_list'].append( {
+                    'id'   : my_radio.get_id(),
+                    'name' : my_radio.get_name(),
+                    'xpath': my_radio.get_xpath(),
+                    'value': my_radio.get_value()
+                } )
+            radios_data['radios'].append(radio_field_data)
+        return radios_data
 
     def get_all_radios(self):
         return self._radios
@@ -390,8 +469,8 @@ class State:
                 }
                 for my_radio in my_radio_field.get_radio_list():
                     radio_data = {
-                        'id': my_radio.get_id(),
-                        'name': my_radio.get_name(),
+                        'id'   : my_radio.get_id(),
+                        'name' : my_radio.get_name(),
                         'xpath': my_radio.get_xpath(),
                         'value': my_radio.get_value()
                     }
@@ -402,6 +481,21 @@ class State:
 
     def set_candidate_clickables(self, candidate_clickables):
         self._candidate_clickables = candidate_clickables
+
+    def get_candidate_clickables(self, iframe_key):
+        return self._candidate_clickables[iframe_key]
+
+    def get_candidate_clickables_json(self, iframe_key):
+        candidate_clickables_data = { 'candidate_clickables': [] }
+        candidate_clickables_data['iframe_list'] = iframe_key.split(';') if iframe_key else None
+        for c, xpath in self._candidate_clickables[iframe_key]:
+            candidate_clickable = {}
+            candidate_clickable['id'] = c['id'] if c.has_attr('id') else None
+            candidate_clickable['name'] = c['name'] if c.has_attr('name') else None
+            candidate_clickable['xpath'] = xpath
+            candidate_clickable['tag'] = c.name
+            candidate_clickables_data['candidate_clickables'].append(candidate_clickable)
+        return candidate_clickables_data
 
     def get_all_candidate_clickables(self):
         return self._candidate_clickables
@@ -426,15 +520,44 @@ class State:
     def get_dom_list(self):
         return self._dom_list
 
+    def get_basic_dom(self):
+        if not self._dom_list:
+            return ""
+        else:
+            for stateDom in self._dom_list:
+                if not stateDom['iframe_path']:
+                    return stateDom['dom']
+            return ""
+
+    def get_dom(self, iframe_key):
+        if not self._dom_list:
+            return ""
+        else:
+            for stateDom in self._dom_list:
+                if not iframe_key and not stateDom['iframe_path']:
+                    return stateDom['dom']
+                elif ';'.join(stateDom['iframe_path']) == iframe_key:
+                    return stateDom['dom']
+            return ""
+
     def get_all_dom(self):
-        dom = [ stateDom['dom'] for stateDom in self._dom_list ]
-        dom = "\n".join(dom)
-        return dom
+        if not self._dom_list:
+            pass
+        else:
+            dom = [ stateDom['dom'] for stateDom in self._dom_list ]
+            dom = "\n".join(dom)
+            return dom
 
     def get_all_normalize_dom(self):
-        dom = [ DomAnalyzer.normalize( stateDom['dom'] ) for stateDom in self._dom_list ]
-        dom = "\n".join(dom)
-        return dom
+        if not self._dom_list:
+            pass
+        else:
+            dom = [ DomAnalyzer.normalize( stateDom['dom'] ) for stateDom in self._dom_list ]
+            dom = "\n".join(dom)
+            return dom
+
+    def clear_dom(self):
+        self._dom_list = None
 
     def set_url(self, url):
         self._url = url
@@ -479,6 +602,12 @@ class State:
         state_data = {
             'id': self._id,
             'url': self._url,
+            'dom_path': posixpath.join(
+                            posixpath.join(
+                                *(relpath(
+                                    configuration.get_path('dom'),
+                                    configuration.get_path('root')
+                                    ).split(os.sep) ) ), self._id + '.txt' ),
             'img_path': posixpath.join(
                             posixpath.join(
                                 *(relpath(
