@@ -8,14 +8,15 @@ Module docstring
 import os, sys, json, posixpath, time, codecs, datetime, logging, traceback
 from configuration import SeleniumConfiguration, Browser, MutationMethod
 from automata import Automata, State
+from algorithm import DFScrawler
 from clickable import Clickable, InputField, SelectField
-from executor import SeleniumExecutor
-from crawler import SeleniumCrawler
-from visualizer import Visualizer
-from dom_analyzer import DomAnalyzer
-from data_bank import MysqlDataBank, InlineDataBank
-from normalizer import AttributeNormalizer, TagNormalizer, TagWithAttributeNormalizer
 from connecter import mysqlConnect, nullConnect
+from crawler import SeleniumCrawler
+from data_bank import MysqlDataBank, InlineDataBank
+from dom_analyzer import DomAnalyzer
+from executor import SeleniumExecutor
+from normalizer import AttributeNormalizer, TagNormalizer, TagWithAttributeNormalizer
+from visualizer import Visualizer
 
 #==============================================================================================================================
 # Selenium Web Driver
@@ -78,8 +79,8 @@ def SeleniumMutationTrace(folderpath, dirname, config_fname, traces_fname, trace
 
 def debugTestMain(folderpath, dirname):
     logging.info(" setting config...")
-    config = SeleniumConfiguration(Browser.FireFox, "http://140.112.42.145:2000/demo/nothing/people.html")
-    config.set_max_depth(1)
+    config = SeleniumConfiguration(Browser.FireFox, "http://140.112.42.145:2000/demo/nothing/main.html")
+    config.set_max_depth(2)
     config.set_max_states(100)
     config.set_folderpath(folderpath)
     config.set_dirname(dirname)
@@ -87,14 +88,18 @@ def debugTestMain(folderpath, dirname):
     config.set_traces_fname('traces.json')
     config.set_frame_tags(['iframe'])
     config.set_dom_inside_iframe(True)
+    config.set_simple_clickable_tags()
+    config.set_simple_inputs_tags()
+    config.set_simple_normalizers()
 
     logging.info(" setting executor...")
     executor = SeleniumExecutor(config.get_browserID(), config.get_url())
 
     logging.info(" setting crawler...")
-    automata = Automata()
-    databank = InlineDataBank("140.112.42.145:2000", "jeff", "zj4bj3jo37788", "test")    
-    crawler = SeleniumCrawler(config, executor, automata, databank)
+    automata = Automata(config)
+    databank = InlineDataBank("140.112.42.145:2000", "jeff", "zj4bj3jo37788", "test")
+    algorithm = DFScrawler()
+    crawler = SeleniumCrawler(config, executor, automata, databank, algorithm)
 
     logging.info(" crawler start run...")
     crawler.run_algorithm()

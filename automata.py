@@ -13,14 +13,15 @@ from dom_analyzer import DomAnalyzer
 from hashUtil import Hash
 
 class Automata:
-    def __init__(self):
+    def __init__(self, configuration):
         self._states = []
         self._edges = []
         self._initial_state = None
         self._current_state = None
         self._automata_fname = 'automata.json'
+        self.configuration = configuration
         # make a hashmap with 19 blocks for states
-        self._hash = Hash(19, self)
+        self._hash = Hash(19, self, self.configuration)
         # make a graph for counting paths
         self._graph = networkx.DiGraph()
 
@@ -107,27 +108,26 @@ class Automata:
                 traces.append( (state_trace, edge_trace) )
         return traces
 
-    def save_dom(self, configuration, state):
+    def save_dom(self, state):
         try:
             #make dir for each state
-            state_dir = os.path.join( configuration.get_abs_path('dom'), state.get_id() )
+            state_dir = os.path.join( self.configuration.get_abs_path('dom'), state.get_id() )
             if not os.path.isdir(state_dir):
                 os.makedirs(state_dir)
 
-            iframe_num = 0
-            iframe_key_dict = {}
-            for stateDom in state.get_dom_list():
+            iframe_key_dict = { 'num': 0 }
+            for stateDom in state.get_dom_list(self.configuration):
                 iframe_key = ';'.join(stateDom['iframe_path']) if stateDom['iframe_path'] else None
                 #make new dir for iframe
                 if stateDom['iframe_path']:
-                    iframe_num += 1
-                    iframe_key_dict[ str(iframe_num) ] = { 'path' : stateDom['iframe_path'], 'url': stateDom['url'] }
-                    dom_dir = os.path.join( configuration.get_abs_path('dom'), state.get_id(), str(iframe_num) )
+                    iframe_key_dict['num'] += 1
+                    iframe_key_dict[ str(iframe_key_dict['num']) ] = { 'path' : stateDom['iframe_path'], 'url': stateDom['url'] }
+                    dom_dir = os.path.join( self.configuration.get_abs_path('dom'), state.get_id(), str(iframe_key_dict['num']) )
                     if not os.path.isdir(dom_dir):
                         os.makedirs(dom_dir)
                 else:
                     iframe_key_dict['basic'] = { 'url' : stateDom['url'] }
-                    dom_dir = os.path.join( configuration.get_abs_path('dom'), state.get_id() )
+                    dom_dir = os.path.join( self.configuration.get_abs_path('dom'), state.get_id() )
 
                 with codecs.open( os.path.join( dom_dir, state.get_id()+'.txt'),            'w', encoding='utf-8' ) as f:
                     f.write( stateDom['dom'] )
@@ -153,15 +153,15 @@ class Automata:
             state.clear_dom()
 
         except Exception as e:  
-            logging.error(' save dom : %s \t\t__from crawler.py save_dom()', str(e))
+            logging.error(' save dom : %s \t\t__from automata.py save_dom()', str(e))
 
-    def save_state(self, configuration, state, depth):
+    def save_state(self, state, depth):
         candidate_clickables = {}       
         inputs = {}
         selects = {}
         checkboxes = {}
         radios = {}
-        for stateDom in state.get_dom_list():
+        for stateDom in state.get_dom_list(self.configuration):
             iframe_path_list = stateDom['iframe_path']
             dom = stateDom['dom']
             # define iframe_key of dom dict
@@ -180,10 +180,10 @@ class Automata:
         state.set_radios(radios)
         state.set_depth(depth)
 
-        self.save_dom(configuration, state)
+        self.save_dom(state)
 
-    def save_state_shot(self, configuration, executor, state):
-        path = os.path.join(configuration.get_abs_path('state'), state.get_id() + '.png')
+    def save_state_shot(self, executor, state):
+        path = os.path.join(self.configuration.get_abs_path('state'), state.get_id() + '.png')
         executor.get_screenshot(path)
 
     def save_traces(self, configuration):
@@ -517,21 +517,66 @@ class State:
             note.append(iframe_data)
         return note
 
-    def get_dom_list(self):
-        return self._dom_list
-
-    def get_basic_dom(self):
+    def get_dom_list(self, configuration):
         if not self._dom_list:
-            return ""
+            dom_list = []
+
+            # load basic dom
+            dom_path = os.path.join( configuration.get_abs_path('dom'), self._id, self._id+'.txt' )
+            if not os.path.exists(dom_path):
+                return [ { 'url': self._url, 'dom': "", 'iframe_path': None } ]
+
+            with codecs.open( dom_path, 'r', encoding='utf-8') as f:
+                dom_list.append( { 'url': self._url, 'dom': f.read(), 'iframe_path': None } )
+
+            # check and load iframe dom
+            list_dir = os.path.join( configuration.get_abs_path('dom'), self._id, 'iframe_list.json' )
+            if os.path.exists(list_dir):
+                with codecs.open( list_dir, 'r', encoding='utf-8' ) as f:
+                    list_json = json.load(f)
+                for i in range(list_json['num']):
+                    dom_path = os.path.join( configuration.get_abs_path('dom'), self._id, str(i), self._id+'.txt' )
+                    if os.path.exists(dom_path):
+                        with codecs.open( dom_path, 'r', encoding='utf-8') as f:
+                            dom_list.appens( { 'url': list_json[str(i+1)]['url'] , 'dom': f.read(), 'iframe_path': list_json[str(i+1)]['path'] } )
+            return dom_list
+        else:
+            return self._dom_list
+
+    def get_basic_dom(self, configuration):
+        if not self._dom_list:
+            dom_path = os.path.join( configuration.get_abs_path('dom'), self._id, self._id+'.txt' )
+            if os.path.exists(dom_path):
+                with codecs.open( dom_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            else:
+                return ""
         else:
             for stateDom in self._dom_list:
                 if not stateDom['iframe_path']:
                     return stateDom['dom']
             return ""
 
-    def get_dom(self, iframe_key):
+    def get_dom(self, configuration, iframe_key):
+        if not iframe_key:
+            return self.get_basic_dom()
         if not self._dom_list:
-            return ""
+            list_dir = os.path.join( configuration.get_abs_path('dom'), state.get_id(), 'iframe_list.json' )
+            if os.path.exists(list_dir):
+                with codecs.open( list_dir, 'r', encoding='utf-8' ) as f:
+                    list_json = json.load(f)
+                for i in range(list_json['num']):
+                    if ';'.join( list_json[str(i+1)]['path'] ) == iframe_key:
+                        dom_path = os.path.join( configuration.get_abs_path('dom'), self._id, str(i+1), self._id+'.txt' )
+                        if os.path.exists(dom_path):
+                            with codecs.open( dom_path, 'r', encoding='utf-8') as f:
+                                return f.read()
+                        else:
+                            return ""
+                        break
+                return ""
+            else:
+                return ""
         else:
             for stateDom in self._dom_list:
                 if not iframe_key and not stateDom['iframe_path']:
@@ -540,17 +585,23 @@ class State:
                     return stateDom['dom']
             return ""
 
-    def get_all_dom(self):
+    def get_all_dom(self, configuration):
         if not self._dom_list:
-            pass
+            dom_list = self.get_dom_list(configuration)
+            dom = [ stateDom['dom'] for stateDom in dom_list ]
+            dom = "\n".join(dom)
+            return dom
         else:
             dom = [ stateDom['dom'] for stateDom in self._dom_list ]
             dom = "\n".join(dom)
             return dom
 
-    def get_all_normalize_dom(self):
+    def get_all_normalize_dom(self, configuration):
         if not self._dom_list:
-            pass
+            dom_list = self.get_dom_list(configuration)
+            dom = [ DomAnalyzer.normalize( stateDom['dom'] ) for stateDom in dom_list ]
+            dom = "\n".join(dom)
+            return dom
         else:
             dom = [ DomAnalyzer.normalize( stateDom['dom'] ) for stateDom in self._dom_list ]
             dom = "\n".join(dom)
