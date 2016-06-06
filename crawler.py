@@ -55,28 +55,42 @@ class SeleniumCrawler(Crawler):
         return self.automata
 
     def run_algorithm(self):
-        self.action_events = []
-        self.initial()
+        # repeat for trace_amount times
+        for i in range( self.configuration.get_trace_amount() ):
 
-        while self.action_events:
-            string = ''.join([ str(action['action']['clickable'].get_id())+str(action['depth'])+str(action['state'].get_id()) for action in self.action_events ])
-            logging.info(' action_events : '+string )
+            self.initial()
 
-            state, action, depth = self.get_next_action()
-            self.change_state(state, action, depth)
-            edge = self.trigger_action(state, action, depth)
-            self.update_states(state, edge, action, depth)
+            while self.action_events:
+                #check time
+                if (time.time() - self.time_start) > self.configuration.get_max_time():
+                    logging.info("|||| TIMO OUT |||| end crawl ")
+                    break
+
+                string = ''.join([ str(action['action']['clickable'].get_id())+str(action['depth'])+str(action['state'].get_id()) for action in self.action_events ])
+                logging.info(' action_events : '+string )
+
+                state, action, depth = self.get_next_action()
+                self.change_state(state, action, depth)
+                edge = self.trigger_action(state, action, depth)
+                self.update_states(state, edge, action, depth)
+
+            self.close()
+            print('close')
         
         return self.automata
 
     def initial(self):
+        self.action_events = []
         #start time
         self.time_start = time.time()
-
         self.algorithm.prepare()
 
         current_state = self.automata.get_current_state()
         self.add_new_events(current_state, None, 0)
+
+    def close(self):
+        self.algorithm.end()
+        self.executor.close()
 
     def get_next_action(self):
         event = self.algorithm.get_next_action( self.action_events )
@@ -95,10 +109,10 @@ class SeleniumCrawler(Crawler):
         logging.info(' now depth(%s) - max_depth(%s); current state: %s', 0, self.configuration.get_max_depth(), state.get_id() )
 
     def trigger_action(self, state, action, depth):
-        inputs     = state.get_inputs( action['iframe_key'] )
-        selects    = state.get_selects(action['iframe_key'])
-        checkboxes = state.get_checkboxes(action['iframe_key'])
-        radios     = state.get_radios(action['iframe_key'])
+        inputs     = state.get_copy_inputs( action['iframe_key'] )
+        selects    = state.get_copy_selects(action['iframe_key'])
+        checkboxes = state.get_copy_checkboxes(action['iframe_key'])
+        radios     = state.get_copy_radios(action['iframe_key'])
 
         new_edge = Edge(state.get_id(), None, action['clickable'], inputs, selects, checkboxes, radios, action['iframe_key'] )
         self.algorithm.trigger_action( state, new_edge, action, depth )
@@ -120,10 +134,9 @@ class SeleniumCrawler(Crawler):
             # save this click edge
             current_state.add_clickable(action['clickable'], action['iframe_key'])
             self.automata.change_state(new_state)
-            self.event_history.append(new_edge)
-
             # depth GO ON
             depth += 1
+            self.event_history.append(new_edge)
 
             if is_newly_added:
                 self.algorithm.update_with_new_state(current_state, new_state, new_edge, action, depth, dom_list, url)
@@ -137,87 +150,9 @@ class SeleniumCrawler(Crawler):
     def add_new_events(self, state, prev_state, depth):
         self.algorithm.add_new_events(state, prev_state, depth)
 
-    #=============================================================================================
-    # DEFAULT CRAWL
-    #=============================================================================================
-    def crawl(self, depth, prev_state=None):
-        # check if depth over max depth , time over max time
-        if depth > self.configuration.get_max_depth():
-            return
-        if (time.time() - self.time_start) > self.configuration.get_max_time():
-            logging.info("|||| TIMO OUT |||| end crawl ")
-            return
-
-        current_state = self.automata.get_current_state()
-        logging.info(' now depth(%s) - max_depth(%s); current state: %s', depth, self.configuration.get_max_depth(), current_state.get_id() )
-        for clickables, iframe_key in DomAnalyzer.get_clickables(current_state, prev_state if prev_state else None):
-            inputs = current_state.get_inputs(iframe_key)
-            selects = current_state.get_selects(iframe_key)
-            checkboxes = current_state.get_checkboxes(iframe_key)
-            radios = current_state.get_radios(iframe_key)
-
-            for clickable in clickables:
-                # check if time over max time
-                if (time.time() - self.time_start) > self.configuration.get_max_time():
-                    logging.info("|||| TIMO OUT |||| depth:%s state:%s break crawl ", depth, current_state.get_id() )
-                    break
-
-                new_edge = Edge(current_state.get_id(), None, clickable, inputs, selects, checkboxes, radios, iframe_key)
-                self.make_value(new_edge)
-                logging.info(' |depth:%s state:%s| fire element in iframe(%s)', depth, current_state.get_id(), iframe_key)
-                self.click_event_by_edge(new_edge)
-
-                dom_list, url, is_same = self.is_same_state_dom(current_state)
-                if is_same:
-                    continue
-                    '''
-                    self.make_value(new_edge)
-                    logging.info(' nothing happen, state %s fire element in iframe(%s) again ',current_state.get_id(), iframe_key)
-                    self.click_event_by_edge(new_edge)
-                    dom_list, url, is_same = self.is_same_state_dom(current_state)
-                    if is_same:
-                        logging.info(' nothing happen')
-                        continue
-                    '''
-                if self.is_same_domain(url):
-                    logging.info(' |depth:%s state:%s| change dom to: %s', depth, current_state.get_id(), self.executor.get_url())
-                    # check if this is a new state
-                    temp_state = State(dom_list, url)
-                    new_state, is_newly_added = self.automata.add_state(temp_state)
-                    self.automata.add_edge(new_edge, new_state.get_id())
-                    # save this click edge
-                    current_state.add_clickable(clickable, iframe_key)
-                    '''TODO: value of inputs should connect with edges '''
-                    if is_newly_added:
-                        logging.info(' |depth:%s state:%s| add new state %s of : %s', depth, current_state.get_id(), new_state.get_id(), url )
-                        self.automata.save_state(new_state, depth)
-                        self.automata.save_state_shot(self.executor, new_state)
-                        self.event_history.append( new_edge )
-                        if depth < self.configuration.get_max_depth():
-                            self.automata.change_state(new_state)
-                            self.crawl(depth+1, current_state)
-                        self.event_history.pop()
-                    self.automata.change_state(current_state)
-                else:
-                    logging.info(' |depth:%s state:%s| out of domain: %s', depth, current_state.get_id(), url)
-
-                # check if time over max time
-                if (time.time() - self.time_start) > self.configuration.get_max_time():
-                    logging.info("|||| TIMO OUT |||| depth:%s state:%s break crawl ", depth, current_state.get_id() )
-                    break
-
-                logging.info('==========< BACKTRACK START >==========')
-                logging.info('==<BACKTRACK> depth %s -> backtrack to state %s',depth ,current_state.get_id() )
-                self.backtrack(current_state)
-                self.configuration.save_config('config.json')
-                self.automata.save_automata(self.configuration)
-                Visualizer.generate_html('web', os.path.join(self.configuration.get_path('root'), self.configuration.get_automata_fname()))
-                logging.info('==========< BACKTRACK END   >==========')
-        logging.info(' depth %s -> state %s crawl end', depth, current_state.get_id())
-
     #=========================================================================================
     # BASIC CRAWL
-    #=========================================================================================
+    #=========================================================================================        
     def get_initail_state(self):
         logging.info(' get initial state')
         dom_list, url = self.executor.get_dom_list(self.configuration)
@@ -226,6 +161,8 @@ class SeleniumCrawler(Crawler):
         if is_new:
             self.automata.save_state( initial_state, 0)
             self.automata.save_state_shot(self.executor, initial_state)
+        else:
+            self.automata.change_state(state)
         time.sleep(self.configuration.get_sleep_time())
         return state
 
@@ -336,13 +273,10 @@ class SeleniumCrawler(Crawler):
         self.executor.switch_iframe_and_get_source( edge.get_iframe_list() )
         self.executor.fill_selects( edge.get_selects() )
         self.executor.fill_inputs_text( edge.get_inputs() )
-        self.executor.fill_checkboxes( edge.get_checkboxes() )
-        self.executor.fill_radios( edge.get_radios() )
+        #self.executor.fill_checkboxes( edge.get_checkboxes() )
+        #self.executor.fill_radios( edge.get_radios() )
         self.executor.fire_event( edge.get_clickable() )
-        time.sleep(self.configuration.get_sleep_time())
-
-    def close(self):
-        self.executor.close()
+        #time.sleep(self.configuration.get_sleep_time())
 
     def make_value(self, edge):
         rand = random.randint(0,1000)
@@ -406,6 +340,7 @@ class SeleniumCrawler(Crawler):
             for dom, cs_dom in zip(dom_list, cs_dom_list):
                 if not dom == cs_dom:
                     return dom_list, url, False
+        print ('same dom to: ', cs.get_id())
         return dom_list, url, True
 
 

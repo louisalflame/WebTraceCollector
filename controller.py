@@ -8,7 +8,7 @@ Module docstring
 import os, sys, json, posixpath, time, codecs, datetime, logging, traceback
 from configuration import SeleniumConfiguration, Browser, MutationMethod
 from automata import Automata, State
-from algorithm import DFScrawler
+from algorithm import DFScrawler, MonkeyCrawler
 from clickable import Clickable, InputField, SelectField
 from connecter import mysqlConnect, nullConnect
 from crawler import SeleniumCrawler
@@ -81,6 +81,8 @@ def debugTestMain(folderpath, dirname):
     logging.info(" setting config...")
     config = SeleniumConfiguration(Browser.FireFox, "http://140.112.42.145:2000/demo/nothing/main.html")
     config.set_max_depth(2)
+    config.set_max_length(4)
+    config.set_trace_amount(2)
     config.set_max_states(100)
     config.set_folderpath(folderpath)
     config.set_dirname(dirname)
@@ -98,16 +100,15 @@ def debugTestMain(folderpath, dirname):
     logging.info(" setting crawler...")
     automata = Automata(config)
     databank = InlineDataBank("140.112.42.145:2000", "jeff", "zj4bj3jo37788", "test")
-    algorithm = DFScrawler()
+    algorithm = MonkeyCrawler() #DFScrawler()
     crawler = SeleniumCrawler(config, executor, automata, databank, algorithm)
 
     logging.info(" crawler start run...")
     crawler.run_algorithm()
-    crawler.close()
 
     logging.info(" end! save automata...")
-    automata.save_traces(config)
-    automata.save_automata(config, config.get_automata_fname())
+    algorithm.save_traces()
+    automata.save_automata(config.get_automata_fname())
     Visualizer.generate_html('web', os.path.join(config.get_path('root'), config.get_automata_fname()))
     config.save_config('config.json')
 #==============================================================================================================================

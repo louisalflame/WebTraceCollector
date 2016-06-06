@@ -16,7 +16,6 @@ class Hash :
     def put(self, state):
         new_dom = state.get_all_normalize_dom(self.configuration)
         hashvalue = self.hash_function(new_dom)
-        print( 'hash_val : ', hashvalue )
         for list_id  in self.d[hashvalue]:
             list_dom = self.get_doms_by_stateID(list_id)
             if self.is_normalize_equal(list_dom, new_dom):

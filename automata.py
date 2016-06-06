@@ -67,10 +67,25 @@ class Automata:
 
     def add_edge(self, edge, state_to):
         edge.set_state_to( state_to )
-        edge.set_id( str(len( self._edges )) )
-        self._edges.append(edge)
-        self._graph.add_edge( self.get_state_by_id(edge.get_state_from()),
-                              self.get_state_by_id(edge.get_state_to()) )
+
+        find_same = False
+        for check_edge in self.get_edges_by_from_to( edge.get_state_from(), state_to ):
+            check_json = check_edge.get_edge_json()
+            edge_json = edge.get_edge_json()
+            #check if this edge used
+            if  str(check_json['clickable'] )   == str(edge_json['clickable'] )   and \
+                str(check_json['inputs'] )      == str(edge_json['inputs'] )      and \
+                str(check_json['selects'] )     == str(edge_json['selects'] )     and \
+                str(check_json['checkboxes'] )  == str(edge_json['checkboxes'] )  and \
+                str(check_json['radios'] )      == str(edge_json['radios'] )      and \
+                str(check_json['iframe_list'] ) == str(edge_json['iframe_list'] ) :
+                find_same = True
+
+        if not find_same:
+            edge.set_id( str(len( self._edges )) )
+            self._edges.append(edge)
+            self._graph.add_edge( self.get_state_by_id(edge.get_state_from()),
+                                  self.get_state_by_id(edge.get_state_to()) )
 
     def get_state_by_id(self, sid):
         for s in self._states:
@@ -83,6 +98,13 @@ class Automata:
             if edge.get_state_from() == state_from and edge.get_state_to() == state_to:
                 return edge
         return None
+
+    def get_edges_by_from_to(self, state_from, state_to ):
+        edges = []
+        for edge in self._edges:
+            if edge.get_state_from() == state_from and edge.get_state_to() == state_to:
+                edges.append(edge)
+        return edges
 
     def get_shortest_path(self, target):
         shortest_paths = list( networkx.shortest_simple_paths(self._graph, self._initial_state, target) )
@@ -186,7 +208,25 @@ class Automata:
         path = os.path.join(self.configuration.get_abs_path('state'), state.get_id() + '.png')
         executor.get_screenshot(path)
 
-    def save_traces(self, configuration):
+    def save_traces(self, traces):
+        traces_data = {
+            'traces': []
+        }
+        for trace in traces:
+            trace_data = {
+                'states':[],
+                'edges':[]
+            }
+            for state in trace['states']:
+                trace_data['states'].append(state.get_simple_state_json(self.configuration))
+            for edge in trace['edges']:                
+                trace_data['edges'].append(edge.get_edge_json())
+            traces_data['traces'].append(trace_data)
+
+        with codecs.open(os.path.join(self.configuration.get_abs_path('root'), self.configuration.get_traces_fname()), 'w', encoding='utf-8' ) as f:
+            json.dump(traces_data, f, indent=2, sort_keys=True, ensure_ascii=False)
+
+    def save_simple_traces(self):
         traces = self.get_all_simple_states_and_traces()
         traces_data = {
             'traces': []
@@ -197,16 +237,16 @@ class Automata:
                 'edges':[]
             }
             for state in state_trace:
-                trace_data['states'].append(state.get_simple_state_json(configuration))
+                trace_data['states'].append(state.get_simple_state_json(self.configuration))
             for edge in edge_trace:                
                 trace_data['edges'].append(edge.get_edge_json())
             traces_data['traces'].append(trace_data)
 
-        with codecs.open(os.path.join(configuration.get_abs_path('root'), configuration.get_traces_fname()), 'w', encoding='utf-8' ) as f:
+        with codecs.open(os.path.join(self.configuration.get_abs_path('root'), self.configuration.get_traces_fname()), 'w', encoding='utf-8' ) as f:
             json.dump(traces_data, f, indent=2, sort_keys=True, ensure_ascii=False)
 
-    def save_automata(self, configuration, automata_fname=None):
-        automata_fname = configuration.get_automata_fname() if not automata_fname else automata_fname
+    def save_automata(self, automata_fname=None):
+        automata_fname = self.configuration.get_automata_fname() if not automata_fname else automata_fname
         data = {
             'state': [],
             'edge': [], 
@@ -214,11 +254,11 @@ class Automata:
             'id_prefix': DomAnalyzer.serial_prefix
         }
         for state in self._states:
-            data['state'].append(state.get_state_json(configuration))
+            data['state'].append(state.get_state_json(self.configuration))
         for edge in self._edges:
             data['edge'].append(edge.get_edge_json())
 
-        with codecs.open(os.path.join(configuration.get_abs_path('root'), configuration.get_automata_fname()), 'w', encoding='utf-8' ) as f:
+        with codecs.open(os.path.join(self.configuration.get_abs_path('root'), self.configuration.get_automata_fname()), 'w', encoding='utf-8' ) as f:
             json.dump(data, f, indent=2, sort_keys=True, ensure_ascii=False)
 
 
@@ -307,6 +347,9 @@ class State:
     def get_inputs(self, iframe_key):
         return self._inputs[iframe_key]
 
+    def get_copy_inputs(self, iframe_key):
+        return [ i.get_copy() for i in self._inputs[iframe_key] ]
+
     def get_inputs_json(self, iframe_key):
         inputs_data = { 'inputs': [] }
         inputs_data['iframe_list'] = iframe_key.split(';') if iframe_key else None
@@ -321,6 +364,12 @@ class State:
 
     def get_all_inputs(self):
         return self._inputs 
+
+    def get_all_copy_inputs(self):
+        copy_inputs = {}
+        for key, value in self._inputs.items():
+            copy_inputs[key] = [ i.get_copy() for i in self._inputs[key] ]
+        return copy_inputs
 
     def get_all_inputs_json(self):
         note = []
@@ -345,6 +394,9 @@ class State:
     def get_selects(self, iframe_key):
         return self._selects[iframe_key]
 
+    def get_copy_selects(self, iframe_key):
+        return [ s.get_copy() for s in self._selects[iframe_key] ]
+
     def get_selects_json(self, iframe_key):
         selects_data = { 'selects': [] }
         selects_data['iframe_list'] = iframe_key.split(';') if iframe_key else None
@@ -359,6 +411,12 @@ class State:
 
     def get_all_selects(self):
         return self._selects
+
+    def get_all_copy_selects(self):
+        copy_selects = {}
+        for key, value in self._selects.items():
+            copy_selects[key] = [ s.get_copy() for s in self._selects[key] ]
+        return copy_selects
 
     def get_all_selects_json(self):
         note = []
@@ -384,6 +442,9 @@ class State:
     def get_checkboxes(self, iframe_key):
         return self._checkboxes[iframe_key]
 
+    def get_copy_checkboxes(self, iframe_key):
+        return [ c.get_copy() for c in self._checkboxes[iframe_key] ]
+
     def get_checkboxes_json(self, iframe_key):
         checkboxes_data = { 'checkboxes': [] }
         checkboxes_data['iframe_list'] = iframe_key.split(';') if iframe_key else None
@@ -404,6 +465,12 @@ class State:
 
     def get_all_checkboxes(self):
         return self._checkboxes
+
+    def get_all_copy_checkboxes(self):
+        copy_checkboxes = {}
+        for key, value in self._checkboxes.items():
+            copy_checkboxes[key] = [ c.get_copy() for c in self._checkboxes[key] ]
+        return copy_checkboxes
 
     def get_all_checkboxes_json(self):
         note = []
@@ -434,6 +501,9 @@ class State:
     def get_radios(self, iframe_key):
         return self._radios[iframe_key]
 
+    def get_copy_radios(self, iframe_key):
+        return [ r.get_copy() for r in self._radios[iframe_key] ]
+
     def get_radios_json(self, iframe_key):
         radios_data = { 'radios': [] }
         radios_data['iframe_list'] = iframe_key.split(';') if iframe_key else None
@@ -454,6 +524,12 @@ class State:
 
     def get_all_radios(self):
         return self._radios
+
+    def get_all_copy_radios(self):
+        copy_radios = {}
+        for key, value in self._radios.items():
+            copy_radios[key] = [ r.get_copy() for r in self._radios[key] ]
+        return copy_radios
 
     def get_all_radios_json(self):
         note = []
@@ -526,19 +602,22 @@ class State:
             if not os.path.exists(dom_path):
                 return [ { 'url': self._url, 'dom': "", 'iframe_path': None } ]
 
-            with codecs.open( dom_path, 'r', encoding='utf-8') as f:
-                dom_list.append( { 'url': self._url, 'dom': f.read(), 'iframe_path': None } )
-
             # check and load iframe dom
             list_dir = os.path.join( configuration.get_abs_path('dom'), self._id, 'iframe_list.json' )
             if os.path.exists(list_dir):
                 with codecs.open( list_dir, 'r', encoding='utf-8' ) as f:
                     list_json = json.load(f)
+
                 for i in range(list_json['num']):
-                    dom_path = os.path.join( configuration.get_abs_path('dom'), self._id, str(i), self._id+'.txt' )
+                    dom_path = os.path.join( configuration.get_abs_path('dom'), self._id, str(i+1), self._id+'.txt' )
                     if os.path.exists(dom_path):
                         with codecs.open( dom_path, 'r', encoding='utf-8') as f:
-                            dom_list.appens( { 'url': list_json[str(i+1)]['url'] , 'dom': f.read(), 'iframe_path': list_json[str(i+1)]['path'] } )
+                            dom_list.append( { 'url': list_json[str(i+1)]['url'] , 'dom': f.read(), 'iframe_path': list_json[str(i+1)]['path'] } )
+
+            dom_path = os.path.join( configuration.get_abs_path('dom'), self._id, self._id+'.txt' )
+            with codecs.open( dom_path, 'r', encoding='utf-8') as f:
+                dom_list.append( { 'url': self._url, 'dom': f.read(), 'iframe_path': None } )
+
             return dom_list
         else:
             return self._dom_list

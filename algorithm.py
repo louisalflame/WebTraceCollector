@@ -44,6 +44,14 @@ class AlgoCrawler:
     def update_with_old_state(self, current_state, new_state, new_edge, action, depth, dom_list, url):
         pass  
 
+    @abstractmethod
+    def save_traces(self):
+        pass
+
+    @abstractmethod
+    def end(self):
+        pass
+
 class DFScrawler(AlgoCrawler):
     def __init__(self):
         pass
@@ -109,10 +117,17 @@ class DFScrawler(AlgoCrawler):
             new_state.set_depth(depth)
             self.crawler.add_new_events(new_state, current_state, depth)
 
+    def save_traces(self):
+        self.automata.save_simple_traces()
+
+    def end(self):
+        pass
 
 class MonkeyCrawler(AlgoCrawler):
     def __init__(self):
-        pass
+        self.trace_length_count = 0
+        self.traces = []
+        self.trace_history = {}
 
     def set_utility(self, crawler, configuration, executor, automata):
         self.crawler = crawler
@@ -124,26 +139,31 @@ class MonkeyCrawler(AlgoCrawler):
         #executor
         self.executor.start()
         self.executor.goto_url()
-
         #initial state
         initial_state = self.crawler.get_initail_state()
+        #save trace
+        self.trace_length_count = 0
+        self.trace_history = { 'states': [ initial_state ], 'edges': [] }
+
         self.crawler.run_script_before_crawl(initial_state)
 
     def add_new_events(self, state, prev_state, depth):
-        dom_clickables = DomAnalyzer.get_clickables(state, prev_state if prev_state else None)
-        if not dom_clickables:
+        candidate_clickables = []
+
+        for clickables, iframe_key in DomAnalyzer.get_clickables(state, prev_state if prev_state else None):
+            for clickable in clickables:
+                candidate_clickables.append( (clickable, iframe_key) )
+
+        if not candidate_clickables:
             return
 
-        clickables, iframe_key = random.choice( dom_clickables )
-        if not clickables:
-            return
-
-        clickable = random.choice( clickables )
+        clickable, iframe_key = random.choice( candidate_clickables )
+        print(state.get_id(),clickable.get_id(), clickable.get_xpath())
         self.crawler.action_events.append( {
-                        'state'  : state,
-                        'action' : { 'clickable':clickable, 'iframe_key':iframe_key },
-                        'depth'  : depth,
-                    } )
+            'state'  : state,
+            'action' : { 'clickable':clickable, 'iframe_key':iframe_key },
+            'depth'  : depth,
+        } )
         
     def get_next_action(self, action_events):
         event = action_events.pop()
@@ -151,14 +171,23 @@ class MonkeyCrawler(AlgoCrawler):
 
     def trigger_action(self, state, new_edge, action, depth):
         logging.info(' |depth:%s state:%s| fire element in iframe(%s)', depth, state.get_id(), action['iframe_key'])
+        self.trace_length_count += 1
+
         self.crawler.make_value(new_edge)
         self.crawler.click_event_by_edge(new_edge)
 
     def update_with_same_state(self, current_state, new_edge, action, depth, dom_list, url):
-        # Do Nothing when same state
-        return None
+        #save trace
+        self.trace_history['states'].append(current_state)
+        self.trace_history['edges'].append(new_edge)
+        #get new event again
+        if self.trace_length_count < self.configuration.get_max_length():
+            self.crawler.add_new_events(current_state, None, depth)
 
     def update_with_out_of_domain(self, current_state, new_edge, action, depth, dom_list, url):
+        #save trace
+        self.trace_history['states'].append(current_state)
+        self.trace_history['edges'].append(new_edge)
         # back if state out of domain
         logging.info(' |depth:%s state:%s| out of domain: %s', depth, current_state.get_id(), url)
         logging.info('==========< BACKTRACK START >==========')
@@ -166,18 +195,39 @@ class MonkeyCrawler(AlgoCrawler):
         self.crawler.backtrack(current_state)
         logging.info('==========< BACKTRACK END   >==========')
 
+        #get new event again
+        if self.trace_length_count < self.configuration.get_max_length():
+            self.crawler.add_new_events(current_state, None, depth)
+
     def update_with_new_state(self, current_state, new_state, new_edge, action, depth, dom_list, url):
+        #save trace
+        self.trace_history['states'].append(new_state)
+        self.trace_history['edges'].append(new_edge)
         # automata save new state 
         logging.info(' |depth:%s state:%s| add new state %s of : %s', depth, current_state.get_id(), new_state.get_id(), url )
-
         self.automata.save_state(new_state, depth)
         self.automata.save_state_shot(self.executor, new_state)
 
-        if depth < self.configuration.get_max_depth():
-            self.crawler.add_new_events(new_state, current_state, depth)
+        if self.trace_length_count < self.configuration.get_max_length():
+            self.crawler.add_new_events(new_state, None, depth)
 
     def update_with_old_state(self, current_state, new_state, new_edge, action, depth, dom_list, url):
+        #save trace
+        self.trace_history['states'].append(new_state)
+        self.trace_history['edges'].append(new_edge)
         #check if old state have a shorter depth
-        if depth < self.configuration.get_max_depth():
+        if depth < new_state.get_depth():
             new_state.set_depth(depth)
-            self.crawler.add_new_events(new_state, current_state, depth)
+        if depth > new_state.get_depth():
+            depth = new_state.get_depth()
+        
+        if self.trace_length_count < self.configuration.get_max_length():
+            self.crawler.add_new_events(new_state, None, depth)
+
+    def save_traces(self):
+        self.automata.save_traces(self.traces)
+
+    def end(self):
+        self.traces.append( self.trace_history )
+        self.trace_length_count = 0
+        self.trace_history = {}

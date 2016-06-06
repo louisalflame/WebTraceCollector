@@ -71,6 +71,7 @@ class SeleniumConfiguration(Configuration):
         self._domains = []
         self._scripts = []
         self._trace_amount = 1
+        self._max_length = 1
         self._analyzer = {
             'simple_clickable_tags': False,
             'simple_inputs_tags': False,
@@ -138,6 +139,12 @@ class SeleniumConfiguration(Configuration):
 
     def get_trace_amount(self):
         return self._trace_amount
+
+    def set_max_length(self, length):
+        self._max_length = length
+
+    def get_max_length(self):
+        return self._max_length
 
 #==============================================================================================================
 # Dom analysis configuration

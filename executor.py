@@ -234,14 +234,14 @@ class SeleniumExecutor():
             logging.error(' %s \t\t__from executor.py get_source()', str(e))
             self.driver.refresh()
             self.check_after_click()
-            self.driver.page_source
+            text = self.driver.page_source
         except Exception as e:
             logging.error(' %s \t\t__from executor.py get_source()', str(e))
             url = self.driver.current_url
             self.driver.close()
             self.start()
             self.driver.get(url)
-            self.driver.page_source
+            text = self.driver.page_source
         except Exception as e:
             logging.error(' %s \t\t__from executor.py get_source()', str(e))
             text = "ERROR! cannot load file"
