@@ -713,7 +713,7 @@ class State:
                                 *(relpath(
                                     configuration.get_path('dom'),
                                     configuration.get_path('root')
-                                    ).split(os.sep) ) ), self._id + '.txt' ),
+                                    ).split(os.sep) ) ), self._id, self._id + '.txt' ),
             'img_path': posixpath.join(
                             posixpath.join(
                                 *(relpath(
