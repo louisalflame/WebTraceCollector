@@ -80,6 +80,7 @@ class Automata:
                 str(check_json['radios'] )      == str(edge_json['radios'] )      and \
                 str(check_json['iframe_list'] ) == str(edge_json['iframe_list'] ) :
                 find_same = True
+                edge.set_id( check_edge.get_id() )
 
         if not find_same:
             edge.set_id( str(len( self._edges )) )

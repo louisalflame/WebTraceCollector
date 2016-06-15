@@ -75,7 +75,6 @@ class SeleniumCrawler(Crawler):
                 self.update_states(state, edge, action, depth)
 
             self.close()
-            print('close')
         
         return self.automata
 
