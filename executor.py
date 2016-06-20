@@ -112,7 +112,15 @@ class SeleniumExecutor():
 
     #==========================================================================================================================
     # FIRE EVENT
-    #==========================================================================================================================            
+    #==========================================================================================================================
+    def click_event_by_edge(self, edge):
+        self.switch_iframe_and_get_source( edge.get_iframe_list() )
+        self.fill_selects( edge.get_selects() )
+        self.fill_inputs_text( edge.get_inputs() )
+        self.fill_checkboxes( edge.get_checkboxes() )
+        self.fill_radios( edge.get_radios() )
+        self.fire_event( edge.get_clickable() )
+
     def get_element_by_tag(self, element):
         if element.get_id() and not element.get_id().startswith(DomAnalyzer.serial_prefix):
             return self.driver.find_element_by_id( element.get_id() )
