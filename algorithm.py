@@ -94,7 +94,7 @@ class DFScrawler(AlgoCrawler):
     def trigger_action(self, state, new_edge, action, depth):
         logging.info(' |depth:%s state:%s| fire element in iframe(%s)', depth, state.get_id(), action['iframe_key'])
         self.crawler.make_value(new_edge)
-        self.crawler.click_event_by_edge(new_edge)
+        self.executor.click_event_by_edge(new_edge)
 
     def update_with_same_state(self, current_state, new_edge, action, depth, dom_list, url):
         # Do Nothing when same state
@@ -187,7 +187,7 @@ class MonkeyCrawler(AlgoCrawler):
         self.trace_length_count += 1
 
         self.crawler.make_value(new_edge)
-        self.crawler.click_event_by_edge(new_edge)
+        self.executor.click_event_by_edge(new_edge)
 
     def update_with_same_state(self, current_state, new_edge, action, depth, dom_list, url):
         #save trace

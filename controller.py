@@ -80,9 +80,9 @@ def SeleniumMutationTrace(folderpath, dirname, config_fname, traces_fname, trace
 def debugTestMain(folderpath, dirname):
     logging.info(" setting config...")
     config = SeleniumConfiguration(Browser.FireFox, "http://140.112.42.145:2000/demo/nothing/main.html")
-    config.set_max_depth(2)
-    config.set_max_length(3)
-    config.set_trace_amount(2)
+    config.set_max_depth(5)
+    config.set_max_length(5)
+    config.set_trace_amount(10)
     config.set_max_states(100)
     config.set_folderpath(folderpath)
     config.set_dirname(dirname)
@@ -100,7 +100,7 @@ def debugTestMain(folderpath, dirname):
     logging.info(" setting crawler...")
     automata = Automata(config)
     databank = InlineDataBank("140.112.42.145:2000", "jeff", "zj4bj3jo37788", "test")
-    algorithm = Monkey2Crawler() #DFScrawler()
+    algorithm = MonkeyCrawler() #DFScrawler()
     crawler = SeleniumCrawler(config, executor, automata, databank, algorithm)
 
     logging.info(" crawler start run...")
