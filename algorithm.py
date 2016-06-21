@@ -198,9 +198,6 @@ class MonkeyCrawler(AlgoCrawler):
             self.crawler.add_new_events(current_state, None, depth)
 
     def update_with_out_of_domain(self, current_state, new_edge, action, depth, dom_list, url):
-        #save trace
-        self.trace_history['states'].append(current_state)
-        self.trace_history['edges'].append(new_edge)
         # back if state out of domain
         logging.info(' |depth:%s state:%s| out of domain: %s', depth, current_state.get_id(), url)
         logging.info('==========< BACKTRACK START >==========')
