@@ -215,8 +215,9 @@ class Automata:
         }
         for trace in traces:
             trace_data = {
-                'states':[],
-                'edges':[]
+                'states' : [],
+                'edges'  : [],
+                'label'  : 'Unlabeled'
             }
             for state in trace['states']:
                 trace_data['states'].append(state.get_simple_state_json(self.configuration))
