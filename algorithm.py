@@ -88,7 +88,7 @@ class DFScrawler(AlgoCrawler):
     def change_state(self, state, action, depth):
         logging.info('==========< BACKTRACK START >==========')
         logging.info('==<BACKTRACK> depth %s -> backtrack to state %s',depth ,state.get_id() )
-        self.backtrack(state)
+        self.crawler.executor_backtrack(state, self.executor)
         logging.info('==========< BACKTRACK END   >==========')
 
     def trigger_action(self, state, new_edge, action, depth):
@@ -105,14 +105,14 @@ class DFScrawler(AlgoCrawler):
         logging.info(' |depth:%s state:%s| out of domain: %s', depth, current_state.get_id(), url)
         logging.info('==========< BACKTRACK START >==========')
         logging.info('==<BACKTRACK> depth %s -> backtrack to state %s',depth ,current_state.get_id() )
-        self.crawler.backtrack(current_state)
+        self.crawler.executor_backtrack(current_state, self.executor)
         logging.info('==========< BACKTRACK END   >==========')
 
     def update_with_new_state(self, current_state, new_state, new_edge, action, depth, dom_list, url):
         # automata save new state 
         logging.info(' |depth:%s state:%s| add new state %s of : %s', depth, current_state.get_id(), new_state.get_id(), url )
 
-        self.automata.save_state(new_state, depth)
+        self.automata.save_state(self.executor, new_state, depth)
         self.automata.save_state_shot(self.executor, new_state)
 
         if depth < self.configuration.get_max_depth():
@@ -160,27 +160,27 @@ class MonkeyCrawler(AlgoCrawler):
         for clickables, iframe_key in DomAnalyzer.get_clickables(state, prev_state if prev_state else None):
             for clickable in clickables:
                 candidate_clickables.append( (clickable, iframe_key) )
-
         if not candidate_clickables:
             return
 
         clickable, iframe_key = random.choice( candidate_clickables )
-        print(state.get_id(),clickable.get_id(), clickable.get_xpath())
         self.crawler.action_events.append( {
             'state'  : state,
             'action' : { 'clickable':clickable, 'iframe_key':iframe_key },
             'depth'  : depth,
         } )
+        print(state.get_id(),clickable.get_id(), clickable.get_xpath())
         
     def get_next_action(self, action_events):
         event = action_events.pop()
         return event
 
     def change_state(self, state, action, depth):
-        logging.info('==========< BACKTRACK START >==========')
-        logging.info('==<BACKTRACK> depth %s -> backtrack to state %s',depth ,state.get_id() )
-        self.backtrack(state)
-        logging.info('==========< BACKTRACK END   >==========')
+        #logging.info('==========< BACKTRACK START >==========')
+        #logging.info('==<BACKTRACK> depth %s -> backtrack to state %s',depth ,state.get_id() )
+        #self.crawler.executor_backtrack(state, self.executor)
+        #logging.info('==========< BACKTRACK END   >==========')
+        logging.info('==========< MONKEY IGNORE BACKTRACK  >==========')
 
     def trigger_action(self, state, new_edge, action, depth):
         logging.info(' |depth:%s state:%s| fire element in iframe(%s)', depth, state.get_id(), action['iframe_key'])
@@ -202,7 +202,7 @@ class MonkeyCrawler(AlgoCrawler):
         logging.info(' |depth:%s state:%s| out of domain: %s', depth, current_state.get_id(), url)
         logging.info('==========< BACKTRACK START >==========')
         logging.info('==<BACKTRACK> depth %s -> backtrack to state %s',depth ,current_state.get_id() )
-        self.crawler.backtrack(current_state)
+        self.crawler.executor_backtrack(current_state, self.executor)
         logging.info('==========< BACKTRACK END   >==========')
 
         #get new event again
@@ -215,7 +215,7 @@ class MonkeyCrawler(AlgoCrawler):
         self.trace_history['edges'].append(new_edge)
         # automata save new state 
         logging.info(' |depth:%s state:%s| add new state %s of : %s', depth, current_state.get_id(), new_state.get_id(), url )
-        self.automata.save_state(new_state, depth)
+        self.automata.save_state(self.executor, new_state, depth)
         self.automata.save_state_shot(self.executor, new_state)
 
         if self.trace_length_count < self.configuration.get_max_length():
@@ -242,14 +242,15 @@ class MonkeyCrawler(AlgoCrawler):
         self.trace_length_count = 0
         self.trace_history = {}
 
-
-class Monkey2Crawler(AlgoCrawler):
+class CBTMonkeyCrawler(AlgoCrawler):
     def __init__(self):
         self.trace_length_count = 0
         self.traces = []
         self.trace_history = {}
+        self.other_executor = None
 
-        self.other_executor = SeleniumExecutor(1, "http://140.112.42.145:2000/demo/nothing/main.html")
+    def add_executor(self, argv):
+        self.other_executor = SeleniumExecutor(browserID, config.get_url())
 
     def set_utility(self, crawler, configuration, executor, automata):
         self.crawler = crawler
@@ -297,7 +298,7 @@ class Monkey2Crawler(AlgoCrawler):
     def change_state(self, state, action, depth):
         logging.info('==========< BACKTRACK START >==========')
         logging.info('==<BACKTRACK> depth %s -> backtrack to state %s',depth ,state.get_id() )
-        self.other_executor_backtrack(state, self.other_executor)
+        self.crawler.executor_backtrack(state, self.executor, self.other_executor)
         logging.info('==========< BACKTRACK END   >==========')
 
     def trigger_action(self, state, new_edge, action, depth):
@@ -324,7 +325,7 @@ class Monkey2Crawler(AlgoCrawler):
         logging.info(' |depth:%s state:%s| out of domain: %s', depth, current_state.get_id(), url)
         logging.info('==========< BACKTRACK START >==========')
         logging.info('==<BACKTRACK> depth %s -> backtrack to state %s',depth ,current_state.get_id() )
-        self.crawler.backtrack(current_state)
+        self.crawler.executor_backtrack(current_state, self.executor, self.other_executor)
         logging.info('==========< BACKTRACK END   >==========')
 
         #get new event again
@@ -337,7 +338,7 @@ class Monkey2Crawler(AlgoCrawler):
         self.trace_history['edges'].append(new_edge)
         # automata save new state 
         logging.info(' |depth:%s state:%s| add new state %s of : %s', depth, current_state.get_id(), new_state.get_id(), url )
-        self.automata.save_state(new_state, depth)
+        self.automata.save_state(self.executor, new_state, depth)
         self.automata.save_state_shot(self.executor, new_state)
 
         self.check_diff_browser()
@@ -375,4 +376,10 @@ class Monkey2Crawler(AlgoCrawler):
         analysis_elements( self.executor )
         analysis_elements( self.other_executor )
 
-        analysis_with_other_browser( self.executor, self.other_executor )
+        analysis_with_other_browser()
+
+    def analysis_elements(self, executor):
+        pass
+
+    def analysis_with_other_browser(self):
+        pass

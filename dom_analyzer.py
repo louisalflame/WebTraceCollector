@@ -87,7 +87,8 @@ class DomAnalyzer:
         for find_onclick in soup.find_all():
             if find_onclick.has_attr('onclick') and not find_onclick in candidate_clickables:
                 candidate_clickables.append(find_onclick)
-        for candidate_clickable in candidate_clickables:
+
+        for candidate_clickable in candidate_clickables:            
             clickables.append( (candidate_clickable, cls._get_xpath(candidate_clickable)) )
         return clickables
 
@@ -166,11 +167,8 @@ class DomAnalyzer:
             for tag in soup.find_all(invisible_tag):
                 tag.decompose()
         for element in soup.find_all():
-            if element.attrs and element.has_attr('style') and 'display:' in element['style'] and 'none' in element['style']:
-                if element.name in cls._clickable_tags or element.name == 'input' or element.name == 'select':
-                    element.decompose()
-                else:
-                    element.clear()
+            if element.attrs and element.has_attr('style') and 'display:none' in ''.join( element['style'].split() ):
+                element.decompose()
         return soup
     #=============================================================================================
 
@@ -220,6 +218,12 @@ class DomAnalyzer:
     #=============================================================================================
     #Diff: normalize dom 
     @classmethod
+    def visible(cls, dom):
+        soup = BeautifulSoup(dom, 'html5lib')
+        soup = cls.soup_visible(soup)
+        return str(soup)
+
+    @classmethod
     def normalize(cls, dom):
         for normalizer in cls._normalizers:
             dom = normalizer.normalize(dom)
@@ -262,7 +266,7 @@ class DomAnalyzer:
     @classmethod
     def set_simple_clickable_tags(cls):
         cls._clickable_tags.append( Tag('a') )
-        cls._clickable_tags.append( Tag('li') )
+        #cls._clickable_tags.append( Tag('li') )
         cls._clickable_tags.append( Tag('button') )
         cls._clickable_tags.append( Tag('input', {'type': 'submit'}) )
         cls._clickable_tags.append( Tag('input', {'type': 'button'}) )

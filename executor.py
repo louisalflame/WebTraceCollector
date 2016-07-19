@@ -12,6 +12,11 @@ from dom_analyzer import DomAnalyzer
 from configuration import Browser
 from bs4 import BeautifulSoup
 
+if sys.version_info.major >= 3:
+    from urllib.parse import urlparse
+else:
+    from urlparse import urlparse 
+
 #==============================================================================================================================
 # Selenium Web Driver
 #==============================================================================================================================
@@ -66,17 +71,9 @@ class SeleniumExecutor():
     # START / END / RESTART
     #==========================================================================================================================
     def start(self):
-        '''
-            if self.browserID == 1:
-                self.driver = webdriver.Firefox();
-            elif self.browserID == 2:
-                self.driver = webdriver.Chrome(executable_path='C:\Program Files (x86)\Google\Chrome\Application\chromedriver.exe')
-            elif self.browserID == 3:
-                self.driver = webdriver.PhantomJS(executable_path='C:/PhantomJS/bin/phantomjs/phantomjs.exe')
-        '''
         try:
             if self.browserID == Browser.FireFox:
-                self.driver = webdriver.Firefox();
+                self.driver = webdriver.Firefox()
             elif self.browserID == Browser.Chrome:
                 self.driver = webdriver.Chrome(executable_path='/usr/local/share/chromedriver')
             elif self.browserID == Browser.PhantomJS:
@@ -211,11 +208,19 @@ class SeleniumExecutor():
 
     def back_history(self):
         try:
-            time.sleep(1)
             self.driver.back()
             self.check_after_click()
         except Exception as e:
             logging.error(' back : %s \t\t__from executor.py back_history()', str(e))
+
+
+    def back_script(self):
+        try:
+            self.driver.execute_script("window.history.go(-1)")
+            self.check_after_click()
+        except Exception as e:
+            logging.error(' back : %s \t\t__from executor.py back_history()', str(e))
+
 
     def forward_history(self):
         try:
@@ -263,7 +268,11 @@ class SeleniumExecutor():
                     iframe = self.driver.find_element_by_xpath(xpath)
                     self.driver.switch_to_frame(iframe)
         except Exception as e:
-            logging.error(' switch_iframe : %s \t\t__from executor.py switch_iframe_and_get_source()', str(e))
+            logging.error(' switch_iframe : %s \n\t\t__from executor.py switch_iframe_and_get_source()', str(e))
+            if iframe_xpath_list and iframe_xpath_list[0] != 'None':
+                return "ERROR"
+            else: 
+                return self.get_source()
         return self.get_source()
 
     def get_screenshot(self, file_path):
@@ -272,19 +281,21 @@ class SeleniumExecutor():
     def get_dom_list(self, configuration):
         #save dom of iframe in list of StateDom [iframe_path_list, dom, url/src, normalize dom]
         dom_list = []
-        new_dom = self.switch_iframe_and_get_source()
+        new_dom = self.get_source()
         url = self.get_url()
         soup = BeautifulSoup(new_dom, 'html5lib')
         for frame in configuration.get_frame_tags():
             for iframe_tag in soup.find_all(frame):
                 iframe_xpath = DomAnalyzer._get_xpath(iframe_tag)
                 iframe_src = iframe_tag['src'] if iframe_tag.has_attr('src') else None
-                try: #not knowing what error in iframe_tag.clear(): no src
-                    if configuration.is_dom_inside_iframe():
+                if configuration.is_dom_inside_iframe() and iframe_src and self.is_same_domain( configuration, iframe_src ):
+                    try: #not knowing what error in iframe_tag.clear(): no src
+                        print( '_1:',iframe_xpath,'  : ',iframe_src )
                         self.get_dom_of_iframe(configuration, dom_list, [iframe_xpath], iframe_src)
-                    iframe_tag.clear()
-                except Exception as e:
-                    logging.error(' get_dom_of_iframe: %s \t\t__from crawler.py get_dom_list() ', str(e))
+                        iframe_tag.clear()
+                    except Exception as e:
+                        logging.error(' get_dom_of_iframe: %s \t\t__from crawler.py get_dom_list() ', str(e))
+
         dom_list.append( {
                 'url' : url,
                 'dom' : str(soup),
@@ -301,16 +312,39 @@ class SeleniumExecutor():
                 iframe_xpath = DomAnalyzer._get_xpath(iframe_tag)
                 iframe_xpath_list.append(iframe_xpath)
                 iframe_src = iframe_tag['src'] if iframe_tag.has_attr('src') else None
-                try:
-                    self.get_dom_of_iframe(configuration, dom_list, iframe_xpath_list, iframe_src)      
-                    iframe_tag.clear()
-                except Exception as e:
-                    logging.error(' get_dom_of_iframe: %s \t\t__from crawler.py get_dom_list() ', str(e))
+                if iframe_src and self.is_same_domain( configuration, iframe_src ):
+                    try:
+                        print( '_2:',iframe_xpath,'  : ',iframe_src )
+                        self.get_dom_of_iframe(configuration, dom_list, iframe_xpath_list, iframe_src)      
+                        iframe_tag.clear()
+                    except Exception as e:
+                        logging.error(' get_dom_of_iframe: %s \t\t__from crawler.py get_dom_list() ', str(e))
+
         dom_list.append( {
                 'url' : src,
                 'dom' : str(soup),
                 'iframe_path' : iframe_xpath_list,
             } )
+
+    def is_same_domain(self, configuration, url):
+        if not url or url.startswith('javascript'):
+            return False
+
+        if not ( url.startswith('http://') or url.startswith('https://') ):
+            return True
+        elif url.startswith('//'):
+            url = 'http:' + url
+
+        base_url = urlparse( configuration.get_url() )
+        new_url = urlparse( url )
+        if base_url.netloc == new_url.netloc:
+            return True
+        else:
+            for d in configuration.get_domains():
+                d_url = urlparse(d)
+                if d_url.netloc == new_url.netloc:
+                    return True
+            return False
 
     #==========================================================================================================================
     # CHECK 
@@ -344,5 +378,14 @@ class SeleniumExecutor():
 
     def check_tab(self):
         pass
+
+    def check_available(self, clickable_xpath, iframe_list):
+        try:
+            self.switch_iframe_and_get_source( iframe_list )
+            element = self.driver.find_element_by_xpath( clickable_xpath )
+            return element.is_enabled()
+        except Exception as e:
+            logging.error(' Unknown Exception: %s \n\t\t__from executor.py check_available()', str(e))
+            return False
 
 #==============================================================================================================================

@@ -5,7 +5,7 @@
 Module docstring
 """
 
-import os, sys, shutil, json
+import os, sys, shutil, json, codecs
 from bs4 import BeautifulSoup
 
 if sys.version_info.major >= 3:
@@ -40,7 +40,7 @@ class Visualizer:
             except Exception as e:
                 print ( 'Exception: %s in generate_html() of Visualizer' % (str(e)) )
         # parse automata.json, fill the info into state.html
-        with open(automata_file) as f:
+        with codecs.open(automata_file, 'r', 'utf-8-sig') as f:
             img_div_str = ''
             input_graph_str = '''
             digraph {

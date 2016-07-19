@@ -178,7 +178,7 @@ class Automata:
         except Exception as e:  
             logging.error(' save dom : %s \t\t__from automata.py save_dom()', str(e))
 
-    def save_state(self, state, depth):
+    def save_state(self, executor, state, depth):
         candidate_clickables = {}       
         inputs = {}
         selects = {}
@@ -186,11 +186,15 @@ class Automata:
         radios = {}
         for stateDom in state.get_dom_list(self.configuration):
             iframe_path_list = stateDom['iframe_path']
-            dom = stateDom['dom']
+            dom = DomAnalyzer.visible( stateDom['dom'] )
             # define iframe_key of dom dict
             iframe_key = ';'.join(iframe_path_list) if iframe_path_list else None
 
             candidate_clickables[iframe_key] = DomAnalyzer.get_candidate_clickables_soup(dom)
+            #for candidate, candidate_xpath in DomAnalyzer.get_candidate_clickables_soup(dom):
+            #    if executor.check_available( candidate_xpath, iframe_path_list):
+            #        candidate_clickables[iframe_key].append( (candidate, candidate_xpath) )
+
             inputs[iframe_key] = DomAnalyzer.get_inputs(dom)
             selects[iframe_key] = DomAnalyzer.get_selects(dom)
             checkboxes[iframe_key] = DomAnalyzer.get_checkboxes(dom)

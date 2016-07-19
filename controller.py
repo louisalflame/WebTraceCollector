@@ -8,7 +8,7 @@ Module docstring
 import os, sys, json, posixpath, time, codecs, datetime, logging, traceback
 from configuration import SeleniumConfiguration, Browser, MutationMethod
 from automata import Automata, State
-from algorithm import DFScrawler, MonkeyCrawler, Monkey2Crawler
+from algorithm import DFScrawler, MonkeyCrawler, CBTMonkeyCrawler
 from clickable import Clickable, InputField, SelectField
 from connecter import mysqlConnect, nullConnect
 from crawler import SeleniumCrawler
@@ -79,16 +79,16 @@ def SeleniumMutationTrace(folderpath, dirname, config_fname, traces_fname, trace
 
 def debugTestMain(folderpath, dirname):
     logging.info(" setting config...")
-    config = SeleniumConfiguration(Browser.FireFox, "http://140.112.42.145:2000/demo/nothing/main.html")
+    #config = SeleniumConfiguration(Browser.FireFox, "http://140.112.42.145:2000/demo/nothing/main.html")
+    config = SeleniumConfiguration(Browser.FireFox, "https://play.google.com/store?")
     config.set_max_depth(5)
-    config.set_max_length(5)
-    config.set_trace_amount(10)
+    config.set_max_length(4)
+    config.set_trace_amount(25)
     config.set_max_states(100)
     config.set_folderpath(folderpath)
     config.set_dirname(dirname)
-    config.set_automata_fname('automata.json')
-    config.set_traces_fname('traces.json')
-    config.set_frame_tags(['iframe'])
+    #config.set_frame_tags(['iframe'])
+
     config.set_dom_inside_iframe(True)
     config.set_simple_clickable_tags()
     config.set_simple_inputs_tags()
@@ -99,8 +99,8 @@ def debugTestMain(folderpath, dirname):
 
     logging.info(" setting crawler...")
     automata = Automata(config)
-    databank = InlineDataBank("140.112.42.145:2000", "jeff", "zj4bj3jo37788", "test")
-    algorithm = MonkeyCrawler() #DFScrawler()
+    databank = MysqlDataBank("140.112.42.147", "jeff", "zj4bj3jo37788", "test")
+    algorithm = MonkeyCrawler() 
     crawler = SeleniumCrawler(config, executor, automata, databank, algorithm)
 
     logging.info(" crawler start run...")

@@ -75,6 +75,10 @@ class SeleniumCrawler(Crawler):
                 self.update_states(state, edge, action, depth)
 
             self.close()
+
+            self.algorithm.save_traces()
+            self.automata.save_automata(self.configuration.get_automata_fname())
+            Visualizer.generate_html('web', os.path.join(self.configuration.get_path('root'), self.configuration.get_automata_fname()))
         
         return self.automata
 
@@ -154,7 +158,7 @@ class SeleniumCrawler(Crawler):
         initial_state = State( dom_list, url )
         is_new, state = self.automata.set_initial_state(initial_state)
         if is_new:
-            self.automata.save_state( initial_state, 0)
+            self.automata.save_state(self.executor, initial_state, 0)
             self.automata.save_state_shot(self.executor, initial_state)
         else:
             self.automata.change_state(state)
@@ -163,7 +167,7 @@ class SeleniumCrawler(Crawler):
 
     def run_script_before_crawl(self, prev_state):
         for edge in self.configuration.get_before_script():
-            self.click_event_by_edge(edge)
+            self.executor.click_event_by_edge(edge)
             self.event_history.append(edge)
 
             dom_list, url, is_same = self.is_same_state_dom(prev_state)
@@ -186,24 +190,33 @@ class SeleniumCrawler(Crawler):
     #=============================================================================================
     # BACKTRACK
     #=============================================================================================
-    def backtrack(self, state):
+    def executor_backtrack( self, state, *executors ):
         # check if depth over max depth , time over max time
         if (time.time() - self.time_start) > self.configuration.get_max_time():
             logging.info("|||| TIMO OUT |||| end backtrack ")
             return
 
         #if url are same, guess they are just javascipt edges
-        if self.executor.get_url() == state.get_url():
+        if executors[0].get_url() == state.get_url():
             #first, just refresh for javascript button
             logging.info('==<BACKTRACK> : try refresh')
-            self.executor.refresh()
+            for exe in executors:
+                exe.refresh()
             dom_list, url, is_same = self.is_same_state_dom(state)
             if is_same:
                 return True
 
         #if can't , try go back form history
         logging.info('==<BACKTRACK> : try back_history ')
-        self.executor.back_history()
+        for exe in executors:
+            exe.back_history()
+        dom_list, url, is_same = self.is_same_state_dom(state)
+        if is_same:
+            return True
+
+        logging.info('==<BACKTRACK> : try back_script ')
+        for exe in executors:
+            exe.back_script()
         dom_list, url, is_same = self.is_same_state_dom(state)
         if is_same:
             return True
@@ -211,131 +224,54 @@ class SeleniumCrawler(Crawler):
         #if can't , try do last edge of state history
         if self.event_history:
             logging.info('==<BACKTRACK> : try last edge of state history')
-            self.executor.forward_history()
-            self.click_event_by_edge( self.event_history[-1] )
+            for exe in executors:
+                exe.forward_history()
+                exe.click_event_by_edge( self.event_history[-1] )
             dom_list, url, is_same = self.is_same_state_dom(state)
             if is_same:
                 return True
 
         #if can't, try go through all edge
         logging.info('==<BACKTRACK> : start form base ur')
-        self.executor.goto_url()
+        for exe in executors:
+            exe.goto_url()
         dom_list, url, is_same = self.is_same_state_dom(state)
         if is_same:
             return True
-        edges = self.automata.get_shortest_path(state)
-        for edge in edges:
-            self.click_event_by_edge( edge )
+        for edge in self.automata.get_shortest_path(state):
+            for exe in executors:
+                exe.click_event_by_edge( edge )
             dom_list, url, is_same = self.is_same_state_dom(state)
             if is_same:
                 return True
 
         #if can't, restart and try go again
         logging.info('==<BACKTRACK> : retart driver')
-        edges = self.automata.get_shortest_path(state)
-        self.executor.restart_app()
-        self.executor.goto_url()
+        for exe in executors:
+            exe.restart_app()
+            exe.goto_url()
         dom_list, url, is_same = self.is_same_state_dom(state)
         if is_same:
             return True
-        for edge in edges:
-            self.click_event_by_edge(edge)
+        for edge in self.automata.get_shortest_path(state):
+            for exe in executors:
+                exe.click_event_by_edge( edge )
             #check again if executor really turn back. if not, sth error, stop
             state_to = self.automata.get_state_by_id( edge.get_state_to() )
             dom_list, url, is_same = self.is_same_state_dom(state_to)
             if not is_same:
                 try:
+                    debug_dir = os.path.join( self.configuration.get_abs_path('dom'), state.get_id(), 'debug' )
+                    if not os.path.isdir(debug_dir):
+                        os.makedirs(debug_dir)
                     err = State(dom_list, url)
-                    with open('debug/debug_origin_'+state_to.get_id()+'.txt', 'w') as f:
+                    with codecs.open( os.path.join( debug_dir, 'debug_origin_'+state_to.get_id()+'.txt' ), 'w', encoding='utf-8' ) as f:
                         f.write(state_to.get_all_dom(self.configuration))
-                    with open('debug/debug_restart_'+state_to.get_id()+'.txt', 'w') as f:
+                    with codecs.open( os.path.join( debug_dir, 'debug_restart_'+state_to.get_id()+'.txt' ), 'w', encoding='utf-8' ) as f:
                         f.write(err.get_all_dom(self.configuration))
-                    with open('debug/debug_origin_nor_'+state_to.get_id()+'.txt', 'w') as f:
+                    with codecs.open( os.path.join( debug_dir, 'debug_origin_nor_'+state_to.get_id()+'.txt' ), 'w', encoding='utf-8' ) as f:
                         f.write( state_to.get_all_normalize_dom(self.configuration) )
-                    with open('debug/debug_restart_nor_'+state_to.get_id()+'.txt', 'w') as f:
-                        f.write( err.get_all_normalize_dom(self.configuration) )
-                    logging.error('==<BACKTRACK> cannot traceback to %s \t\t__from crawler.py backtrack()', state_to.get_id() )
-                except Exception as e:  
-                    logging.info('==<BACKTRACK> save diff dom : %s', str(e))
-
-        dom_list, url, is_same = self.is_same_state_dom(state)
-        return is_same
-
-    def other_executor_backtrack(self, state, other_executor):
-        # check if depth over max depth , time over max time
-        if (time.time() - self.time_start) > self.configuration.get_max_time():
-            logging.info("|||| TIMO OUT |||| end backtrack ")
-            return
-
-        #if url are same, guess they are just javascipt edges
-        if self.executor.get_url() == state.get_url():
-            #first, just refresh for javascript button
-            logging.info('==<BACKTRACK> : try refresh')
-            self.executor.refresh()
-            other_executor.refresh()
-            dom_list, url, is_same = self.is_same_state_dom(state)
-            if is_same:
-                return True
-
-        #if can't , try go back form history
-        logging.info('==<BACKTRACK> : try back_history ')
-        self.executor.back_history()
-        other_executor.back_history()
-        dom_list, url, is_same = self.is_same_state_dom(state)
-        if is_same:
-            return True
-
-        #if can't , try do last edge of state history
-        if self.event_history:
-            logging.info('==<BACKTRACK> : try last edge of state history')
-            self.executor.forward_history()
-            other_executor.forward_history()
-            self.click_event_by_edge( self.event_history[-1] )
-            dom_list, url, is_same = self.is_same_state_dom(state)
-            if is_same:
-                return True
-
-        #if can't, try go through all edge
-        logging.info('==<BACKTRACK> : start form base ur')
-        self.executor.goto_url()
-        other_executor.goto_url()
-        dom_list, url, is_same = self.is_same_state_dom(state)
-        if is_same:
-            return True
-        edges = self.automata.get_shortest_path(state)
-        for edge in edges:
-            self.executor.click_event_by_edge( edge )
-            other_executor.click_event_by_edge( edge )
-            dom_list, url, is_same = self.is_same_state_dom(state)
-            if is_same:
-                return True
-
-        #if can't, restart and try go again
-        logging.info('==<BACKTRACK> : retart driver')
-        edges = self.automata.get_shortest_path(state)
-        self.executor.restart_app()
-        self.executor.goto_url()
-        other_executor.restart_app()
-        other_executor.goto_url()
-        dom_list, url, is_same = self.is_same_state_dom(state)
-        if is_same:
-            return True
-        for edge in edges:
-            self.executor.click_event_by_edge(edge)
-            other_executor.click_event_by_edge(edge)
-            #check again if executor really turn back. if not, sth error, stop
-            state_to = self.automata.get_state_by_id( edge.get_state_to() )
-            dom_list, url, is_same = self.is_same_state_dom(state_to)
-            if not is_same:
-                try:
-                    err = State(dom_list, url)
-                    with open('debug/debug_origin_'+state_to.get_id()+'.txt', 'w') as f:
-                        f.write(state_to.get_all_dom(self.configuration))
-                    with open('debug/debug_restart_'+state_to.get_id()+'.txt', 'w') as f:
-                        f.write(err.get_all_dom(self.configuration))
-                    with open('debug/debug_origin_nor_'+state_to.get_id()+'.txt', 'w') as f:
-                        f.write( state_to.get_all_normalize_dom(self.configuration) )
-                    with open('debug/debug_restart_nor_'+state_to.get_id()+'.txt', 'w') as f:
+                    with codecs.open( os.path.join( debug_dir, 'debug_restart_nor_'+state_to.get_id()+'.txt' ), 'w', encoding='utf-8' ) as f:
                         f.write( err.get_all_normalize_dom(self.configuration) )
                     logging.error('==<BACKTRACK> cannot traceback to %s \t\t__from crawler.py backtrack()', state_to.get_id() )
                 except Exception as e:  
@@ -354,7 +290,7 @@ class SeleniumCrawler(Crawler):
             data_set = input_field.get_data_set(self.databank)
             #check data set
             value = data_set[ rand % len(data_set) ] if data_set \
-                else ''.join( [random.choice(string.lowercase) for i in xrange(8)] )
+                else ''.join( [random.choice('abcdefghijklmnopqrstuvwxyz') for i in range(8)] )
             input_field.set_value(value)
             logging.info(" set input:%s value:%s "%(input_field.get_id(), value))
 
@@ -370,7 +306,7 @@ class SeleniumCrawler(Crawler):
             data_set = checkbox_field.get_data_set(self.databank)
             #check data set
             selected_list = data_set[ rand % len(data_set) ].split('/') if data_set \
-                else random.sample( xrange(len(checkbox_field.get_checkbox_list())),
+                else random.sample( range(len(checkbox_field.get_checkbox_list())),
                                     random.randint(0, len(checkbox_field.get_checkbox_list())) )
             checkbox_field.set_selected_list(selected_list)
             logging.info(" set checkbox:%s value:%s "%(checkbox_field.get_checkbox_name(), str(selected_list)))
@@ -464,7 +400,7 @@ class SeleniumCrawler(Crawler):
             new_edge.set_state_from( prev_state.get_id() )
             if mutation_trace:
                 self.make_mutant_value(new_edge, mutation_trace[depth])
-            self.click_event_by_edge(new_edge)
+            self.executor.click_event_by_edge(new_edge)
             self.event_history.append(new_edge)
 
             dom_list, url, is_same = self.is_same_state_dom(prev_state)

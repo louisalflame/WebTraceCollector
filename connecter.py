@@ -19,7 +19,7 @@ class mysqlConnect:
         #logging.info(str(cls))
         #logging.info(sql)
 
-        cls.connect = mysql.connector.connect(cls.host, cls.user, cls.password, cls.databank, charset="utf8")
+        cls.connect = mysql.connector.connect(host=cls.host, user=cls.user, password=cls.password, database=cls.databank, charset="utf8")
         cls.cursor = cls.connect.cursor()
         cls.cursor.execute(sql)
         cls.connect.close()
