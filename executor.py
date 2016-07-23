@@ -298,7 +298,7 @@ class SeleniumExecutor():
 
         dom_list.append( {
                 'url' : url,
-                'dom' : str(soup),
+                'dom' : str(soup.prettify()),
                 'iframe_path' : None,
             } )
 
@@ -322,7 +322,7 @@ class SeleniumExecutor():
 
         dom_list.append( {
                 'url' : src,
-                'dom' : str(soup),
+                'dom' : str(soup.prettify()),
                 'iframe_path' : iframe_xpath_list,
             } )
 
@@ -350,7 +350,7 @@ class SeleniumExecutor():
     # CHECK 
     #==========================================================================================================================
     def check_after_click(self):
-        time.sleep(1)
+        time.sleep(0.1)
         self.check_alert()
         self.check_window()
         self.check_tab()

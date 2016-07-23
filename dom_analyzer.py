@@ -167,8 +167,15 @@ class DomAnalyzer:
             for tag in soup.find_all(invisible_tag):
                 tag.decompose()
         for element in soup.find_all():
-            if element.attrs and element.has_attr('style') and 'display:none' in ''.join( element['style'].split() ):
-                element.decompose()
+            if element.attrs and element.has_attr('style') and \
+                ( 'display:none' in ''.join( element['style'].split() ) or 
+                  'hidden' in ''.join( element['style'].split() ) or
+                  'height:0' in ''.join( element['style'].split() ) or 
+                  'width:0' in ''.join( element['style'].split() ) ):
+                if element.name in cls._clickable_tags:
+                    element.decompose()
+                else:
+                    element.clear()
         return soup
     #=============================================================================================
 
