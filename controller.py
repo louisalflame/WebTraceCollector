@@ -79,62 +79,7 @@ def SeleniumMutationTrace(folderpath, dirname, config_fname, traces_fname, trace
 
 def debugTestMain(folderpath, dirname):
     logging.info(" setting config...")
-    #config = SeleniumConfiguration(Browser.FireFox, "http://140.112.42.145:2000/demo/nothing/main.html")
-    '''
-            編號 & 網站名稱 & 網站類型 & URL \\ \hline
-            1 & Facebook & Community platform & https://www.facebook.com/ \\ \hline
-            2 & YouTube & Entertainment & https://www.youtube.com/ \\ \hline                  !! complex iframe  
-            3 & Yahoo & Search engine & https://tw.yahoo.com/ \\ \hline                       !! too many Ineffective clickable 
-            4 &　Google & Search engine & https://www.google.com.tw/ \\ \hline
-            5 &　中時電子報 & News & http://www.chinatimes.com/ \\ \hline
-            6 &　露天拍賣 & Commerce & http://www.ruten.com.tw/ \\ \hline
-            7 &　聯合新聞網 & News & http://udn.com/news/index \\ \hline                      !! DIV 插入 BODY => DOM全錯 
-            8 &　巴哈姆特 & Forum & http://www.gamer.com.tw/ \\ \hline                           always new sub domain 
-            9 &　Mobile01 & Forum & http://www.mobile01.com/ \\ \hline
-            10 & 蘋果日報　& News & http://www.appledaily.com.tw/ \\ \hline
-            11 &　百度 & Search engine & https://www.baidu.com/ \\ \hline                     !! DIV BalloonSpacerLayer => 結構不對 DOM全錯 
-            12 &　東森新聞雲 & News & http://www.ettoday.net/ \\ \hline                          always new window
-            13 &　卡提諾論壇 & Forum & http://ck101.com/ \\ \hline
-            14 &　伊莉討論區 & Forum & http://www40.eyny.com/index.php \\ \hline
-            15 &　Hinet & Search engine & http://www.hinet.net/ \\ \hline                        always new window
-            16 & 微軟Live.com　& Search engine & https://login.live.com/ \\ \hline 
-            17 &　痞客邦 & Blog & https://www.pixnet.net/ \\ \hline                           !! DIV  => DOM全錯 
-            18 &　PChome Online & Search engine & http://shopping.pchome.com.tw \\ \hline        always new sub domain
-            19 & 淘寶　& Commerce & https://world.taobao.com/ \\ \hline                       !! too many Ineffective clickable 
-            20 & Life生活網　& Blog & http://www.life.com.tw/ \\ \hline                          always new sub domain 
-            21 & 104人力銀行 & Survice & http://104.com.tw/ \\ \hline                         !! too many Ineffective clickable 
-            22 & 騰訊網 　& Search Engine & http://www.qq.com/ \\ \hline                         always new window
-            23 & 新浪微博　& Community platform & http://www.weibo.com/login.php \\ \hline    !! DIV js_style_css_module_global_WB_outframe => 結構不對 DOM全錯 
-            24 & 自由時報電子報　& News & http://www.ltn.com.tw/ \\ \hline                       new sub domain/ new window
-            25 & 維基百科　& Dictionary & https://www.wikipedia.org/ \\ \hline                   new sub domain
-            26 & 博客來　& Commerce & http://www.books.com.tw/ \\ \hline
-            27 & 今日新聞網　& News & http://www.nownews.com/ \\ \hline                          always new window
-            28 & 商業周刊　& News & http://www.businessweekly.com.tw/ \\ \hline                  always new window
-            29 & 隨意窩Xuite　& Blog & http://xuite.net/ \\ \hline                               new sub domain/ new window
-            30 & 1111人力銀行　& Survice & http://www.1111.com.tw/ \\ \hline
-            31 & Flickr　& Community platform & https://www.flickr.com/ \\ \hline
-            32 & Blogger　& Blog & http://www.blogger.com/ \\ \hline
-            33 & 批踢踢實業坊　& Community platform & https://www.ptt.cc/index.html \\ \hline
-            34 & FC2　& Survice & http://fc2.com/ \\ \hline
-            35 & 卡卡洛普　& Survice & http://www.gamme.com.tw/ \\ \hline
-            36 & PChome商店街　& Commerce & http://www.pcstore.com.tw/ \\ \hline
-            37 & Giga Circle　& Survice & http://tw.gigacircle.com/ \\ \hline
-            38 & 鉅亨網　& News & http://www.cnyes.com/ \\ \hline
-            39 & momo購物網　& Commerce & http://www.momoshop.com.tw/main/Main.jsp \\ \hline
-            40 & 蕃薯藤　& Search engine & http://www.yam.com/ \\ \hline
-            41 & OB嚴選　& Commerce & http://www.obdesign.com.tw/ \\ \hline
-            42 & GOMAJI　& Commerce & http://www.gomaji.com/Taipei \\ \hline
-            43 & 愛評網　& Survice & http://www.ipeen.com.tw/ \\ \hline
-            44 & 123KUBO酷播　& Entertainment & http://www.123kubo.com/ \\ \hline
-            45 & 591租屋網　& Commerce & https://www.591.com.tw/ \\ \hline
-            46 & TEEPR趣味新聞　& News & http://www.teepr.com/ \\ \hline
-            47 & KKBOX　& Entertainment & https://www.kkbox.com/tw/tc/index.html \\ \hline
-            48 & msn台灣　& Search Engine & http://www.msn.com/zh-tw/ \\ \hline
-            49 & 微軟 & Survice & https://www.microsoft.com/zh-tw/ \\ \hline
-            50 & T客邦　& Blog & http://www.techbang.com/ \\ \hline
-    '''
     config = SeleniumConfiguration(Browser.FireFox, r"http://www.1111.com.tw/")
-    print (config.get_url())
     config.set_max_depth(5)
     config.set_max_length(4)
     config.set_trace_amount(2)
@@ -291,7 +236,7 @@ if __name__ == '__main__':
             except Exception as e:
                 with open("mutant_log.txt","a") as main_log:
                     main_log.write( '[MAIN ERROR-%s]: %s' % (datetime.datetime.now().strftime('%Y%m%d%H%M%S'), traceback.format_exc()) )
-        else:
+        elif sys.argv[1] == '0':
             make_dir(sys.argv[2], sys.argv[3])
             debugTestMain(sys.argv[2], sys.argv[3])
     else:
